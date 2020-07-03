@@ -1,0 +1,26 @@
+{
+    "name": "hellocash/hellomicroservice",
+    "description": "Shared tools for laravel/lighthouse/graphql based webservices, inlcuding RSA JWT auth and multitenancy through JWT claim and laravel scopes",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Michael Huber",
+            "email": "michael.huber@hellocash.at"
+        }
+    ],
+    "minimum-stability": "dev",
+    "autoload": {
+        "psr-4": {
+            "HelloCash\\HelloMicroservice\\": "src/"
+        }
+    },
+    "require": {},
+    "extra": {
+        "laravel": {
+            "providers": [
+                "HelloCash\\HelloMicroservice\\Providers\\LaravelServiceProvider"
+            ]
+        }
+    }
+}
