@@ -15,6 +15,9 @@ class TenantScope implements Scope
 
     public function apply(Builder $builder, Model $model): void
     {
+        if (is_null(self::$tenantId)) {
+            throw new \Exception('Tenant ID is missing!');
+        }
         $builder->where($model->getTable() . '.tenant_id', '=', self::$tenantId);
     }
 
