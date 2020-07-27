@@ -4,6 +4,7 @@
 namespace HelloCash\HelloMicroservice\Providers;
 
 
+use HelloCash\HelloMicroservice\Console\MakeGraphQlSchemaCommand;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\ServiceProvider;
 
@@ -18,12 +19,20 @@ class LaravelServiceProvider extends ServiceProvider
         //$this->mergeConfigFrom($path, 'jwt');
 
         Auth::provider('jwtuser', function($app, array $config) {
-            return new \HelloCash\HelloMicroservice\Providers\JwtUserProvider();
+            return new JwtUserProvider();
         });
     }
 
-
-
+    /**
+     * @return void
+     */
+    public function register()
+    {
+        $this->app->singleton('hello-microservice.make.graphqlschema', function () {
+            return new MakeGraphQlSchemaCommand();
+        });
+        $this->commands('hello-microservice.make.graphqlschema');
+    }
 
 
 }

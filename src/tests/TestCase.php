@@ -2,9 +2,8 @@
 
 namespace HelloCash\HelloMicroservice\tests;
 
-use App\Customer;
+use App\NewsletterRecipient;
 use Exception;
-use HelloCash\HelloMicroservice\Interfaces\CustomMutations;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Testing\TestResponse;
@@ -49,11 +48,13 @@ abstract class TestCase extends BaseTestCase
     protected static function assertModelEqualsDatabase(Model $model): void
     {
         $compareModel = null;
-        if ($model instanceof CustomMutations) {
+        if (in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model), true)) {
             $model->attributesToArray();
             $compareModel = $model::queryForMutations($model->attributesToArray())->first();
         } else {
-            if (empty($model->id)) throw new Exception('Id is not set in model!');
+            if (empty($model->id)) {
+                throw new Exception('Id is not set in model!');
+            }
             $compareModel = $model::find($model->id);
         }
         foreach ($model->getFillable() as $field) {
@@ -81,68 +82,61 @@ abstract class TestCase extends BaseTestCase
 
     /**
      * @param string $classname
-     * @param string[] $select
      * @throws Exception
      */
-    protected function creationTest(string $classname, array $select = ['id']): void
+    protected function creationTest(string $classname): void
     {
-        $this->creationUpdateTestImplementation($classname, $select, 'create');
+        $this->creationUpdateTestImplementation($classname, 'create');
     }
 
     /**
      * @param string $classname
-     * @param string[] $select
      * @throws Exception
      */
-    protected function creationErrorTest(string $classname, array $select = ['id']): void
+    protected function creationErrorTest(string $classname): void
     {
-        $this->creationUpdateErrorTestImplementation($classname, $select, 'create');
+        $this->creationUpdateErrorTestImplementation($classname, 'create');
     }
 
     /**
      * @param string $classname
-     * @param string[] $select
      * @throws Exception
      */
-    protected function updateTest(string $classname, array $select = ['id']): void
+    protected function updateTest(string $classname): void
     {
-        $this->creationUpdateTestImplementation($classname, $select, 'update');
+        $this->creationUpdateTestImplementation($classname, 'update');
     }
 
     /**
      * @param string $classname
-     * @param string[] $select
      * @throws Exception
      */
-    protected function updateErrorTest(string $classname, array $select = ['id']): void
+    protected function updateErrorTest(string $classname): void
     {
-        $this->creationUpdateErrorTestImplementation($classname, $select, 'update');
+        $this->creationUpdateErrorTestImplementation($classname, 'update');
     }
 
     /**
      * @param string $classname
-     * @param string[] $select
      */
-    protected function deletionTest(string $classname, array $select = ['id']): void
+    protected function deletionTest(string $classname): void
     {
-        $this->deletionTestImplementation($classname, $select, false);
+        $this->deletionTestImplementation($classname, false);
     }
 
     /**
      * @param string $classname
-     * @param string[] $select
      */
-    protected function deletionErrorTest(string $classname, array $select = ['id']): void
+    protected function deletionErrorTest(string $classname): void
     {
-        $this->deletionTestImplementation($classname, $select, true);
+        $this->deletionTestImplementation($classname, true);
     }
 
     /**
      * @param string $classname
-     * @param string[] $select
      * @param bool $error
      */
-    private function deletionTestImplementation(string $classname, array $select = ['id'], $error = false): void
+    private function deletionTestImplementation(string $classname, $error = false): void
     {
         if ($error) {
             $model = factory($classname)->make();
@@ -153,8 +147,8 @@ abstract class TestCase extends BaseTestCase
         }
         $shortClassname = $this->getShortClassname($classname);
         $query = 'mutation { delete' . $shortClassname . '(';
-        $query .= implode(', ', $this->getFindBy($model, $select));
-        $query .= ') { ' . implode( ', ', $select) . ' } }';
+        $query .= implode(', ', $this->getFindBy($model));
+        $query .= ') { ' . implode( ', ', $this->getSelect($model)) . ' } }';
         $response = $this->jwt()->graphQL($query);
         $response->assertStatus(200);
         if ($error) {
@@ -172,7 +166,7 @@ abstract class TestCase extends BaseTestCase
         } else {
             $json = [
                 'data' => [
-                    'delete'.$shortClassname => $select
+                    'delete'.$shortClassname => $this->getSelect($model)
                 ]
             ];
             $response->assertJsonStructure($json);
@@ -187,31 +181,31 @@ abstract class TestCase extends BaseTestCase
 
     /**
      * @param string $classname
-     * @param string[] $select
      * @param string $type
      * @throws Exception
      */
-    private function creationUpdateTestImplementation(string $classname, array $select = ['id'], string $type = 'create'): void
+    private function creationUpdateTestImplementation(string $classname, string $type = 'create'): void
     {
         $shortClassname = $this->getShortClassname($classname);
         if ($type === 'update') {
             $model = $classname::first();
             $new = factory($classname)->make();
             foreach ($model->getFillable() as $field) {
-                if ($field === 'tenant_id' || in_array($field, $select, true)) {
+                if ($field === 'tenant_id' || in_array($field, $this->getSelect($model), true)) {
                     continue;
                 }
                 $model->$field = $new->$field;
             }
-            [$query, $jsonStructure] = $this->createMutation('update'.$shortClassname, $model, $select, (!$model instanceof CustomMutations));
+            [$query, $jsonStructure] = $this->createMutation('update'.$shortClassname, $model, !in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model)) );
         } else {
             $model = factory($classname)->make();
-            [$query, $jsonStructure] = $this->createMutation('create'.$shortClassname, $model, $select, false);
+            [$query, $jsonStructure] = $this->createMutation('create'.$shortClassname, $model, false);
         }
         $response = $this->jwt()->graphQL($query);
         $response->assertStatus(200);
         $response->assertJsonStructure($jsonStructure);
-        if ($type === 'create' && !$model instanceof CustomMutations) {
+
+        if ($type === 'create' && !in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model))) {
             $model->id = $response->json('data')[$type.$shortClassname]['id'];
         }
         self::assertModelEqualsDatabase($model);
@@ -219,11 +213,10 @@ abstract class TestCase extends BaseTestCase
 
     /**
      * @param string $classname
-     * @param string[] $select
      * @param string $type
      * @throws Exception
      */
-    private function creationUpdateErrorTestImplementation(string $classname, array $select = ['id'], string $type = 'create'): void
+    private function creationUpdateErrorTestImplementation(string $classname, string $type = 'create'): void
     {
         $shortClassname = $this->getShortClassname($classname);
         $expectedError = null;
@@ -231,20 +224,25 @@ abstract class TestCase extends BaseTestCase
         $model = factory($classname)->make();
         if ($type === 'update') {
             $query = 'mutation { update' . $shortClassname . '(';
-            if ($model instanceof CustomMutations) {
-                foreach ($select as $key) {
+            if (in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model))) {
+                foreach ($this->getSelect($model) as $key) {
                     $query .= $this->createFieldFromCasts($model, $key). ' ';
                 }
             } else {
                 $query .= 'id:1';
             }
-            $query .= ') { ' . implode( ', ', $select) . ' } }';
+            $query .= ') { ' . implode( ', ', $this->getSelect($model)) . ' } }';
         } else {
-            $fields = array_diff($model->getFillable(), $select, ['tenant_id']);
+            $fields = array_diff($model->getFillable(), $this->getSelect($model), ['tenant_id']);
             $key = array_pop($fields);
+            if (is_null($key)) {
+                // fallback for relations that are purely foreign_ids which are in select
+                $fields = $this->getSelect($model);
+                $key = array_pop($fields);
+            }
             $query = 'mutation { create' . $shortClassname . '(';
             $query .= $this->createFieldFromCasts($model, $key). ' ';
-            $query .= ') { ' . implode( ', ', $select) . ' } }';
+            $query .= ') { ' . implode( ', ', $this->getSelect($model)) . ' } }';
         }
         $response = $this->jwt()->graphQL($query);
         self::assertGraphQlError($response, $expectedError);
@@ -252,53 +250,51 @@ abstract class TestCase extends BaseTestCase
 
     /**
      * @param string $classname
-     * @param string[] $select
      * @throws Exception
      */
-    protected function listTest(string $classname, array $select = ['id']): void
+    protected function listTest(string $classname): void
     {
-        $this->listReadTestImplementation($classname, $select, true, false);
+        $this->listReadTestImplementation($classname, true, false);
     }
 
     /**
      * @param string $classname
-     * @param string[] $select
+     * @param string $foreignKey
+     * @param string $postFix
      * @throws Exception
      */
-    protected function readTest(string $classname, array $select = ['id']): void
+    protected function listByForeignKeyTest(string $classname, string $foreignKey, string $postFix = ''): void
     {
-        $this->listReadTestImplementation($classname, $select, false, false);
+        $this->listReadTestImplementation($classname, true, false, $foreignKey, $postFix);
     }
 
     /**
      * @param string $classname
-     * @param string[] $select
      * @throws Exception
      */
-    protected function readErrorTest(string $classname, array $select = ['id']): void
+    protected function readTest(string $classname): void
     {
-        $this->listReadTestImplementation($classname, $select, false, true);
+        $this->listReadTestImplementation($classname, false, false);
     }
 
     /**
      * @param string $classname
-     * @param string[] $select
      * @throws Exception
      */
-    /*
-    protected function listErrorTest(string $classname, array $select = ['id']): void
+    protected function readErrorTest(string $classname): void
     {
-        $this->listReadTestImplementation($classname, $select, true, true);
-    }*/
+        $this->listReadTestImplementation($classname, false, true);
+    }
 
     /**
      * @param string $classname
-     * @param string[] $select
      * @param bool $list
      * @param bool $error
+     * @param string|null $foreignKey
+     * @param string $postFix
      * @throws Exception
      */
-    private function listReadTestImplementation(string $classname, array $select = ['id'], bool $list = false, bool $error = false): void
+    private function listReadTestImplementation(string $classname, bool $list = false, bool $error = false, string $foreignKey = null, string $postFix = ''): void
     {
         $compareModel = $classname::first();
         $shortClassname = lcfirst($this->getShortClassname($classname));
@@ -306,14 +302,18 @@ abstract class TestCase extends BaseTestCase
             $compareModel = factory($classname)->make();
             $compareModel->id = 1;
         }
-        [$query, $jsonStructure] = $this->createQuery($shortClassname, $compareModel, $select, $list);
+        if ($list) {
+            [$query, $jsonStructure] = $this->createListQuery($shortClassname.'s'.$postFix, $compareModel, $foreignKey);
+        } else {
+            [$query, $jsonStructure] = $this->createQuery($shortClassname, $compareModel);
+        }
         $response = $this->jwt()->graphQL($query);
 
         if ($error) {
             $response->assertStatus(200);
             $response->assertJsonStructure([
                 'data' => [
-                    $shortClassname . ($list ? 's' : '')
+                    $shortClassname . ($list ? 's'.$postFix : '')
                 ]
             ]);
             $response->assertJson([
@@ -327,11 +327,11 @@ abstract class TestCase extends BaseTestCase
 
             $model = new $classname();
             if ($list) {
-                $model->fill($response->json('data')[$shortClassname.'s']['data'][0]);
+                $model->fill($response->json('data')[$shortClassname.'s'.$postFix]['data'][0]);
             } else {
                 $model->fill($response->json('data')[$shortClassname]);
             }
-            if (!$model instanceof CustomMutations) {
+            if (!in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model))) {
                 $model->id = $compareModel->id;
             }
             self::assertModelEqualsDatabase($model);
@@ -341,20 +341,27 @@ abstract class TestCase extends BaseTestCase
     /**
      * @param string $name
      * @param Model $model
-     * @param string[] $select
      * @return array
      */
-    private function createMutation(string $name, Model $model, array $select = ['id'], bool $includeId = false): array
+    private function createMutation(string $name, Model $model, bool $includeId = false): array
     {
         $query = 'mutation { ' . $name . '(';
         $query .= implode(' ', $this->getFields($model, $includeId));
-        $query .= ') { ' . implode( ', ', $select) . ' } }';
+        $query .= ') { ' . implode( ', ', $this->getSelect($model)) . ' } }';
         $json = [
             'data' => [
-                $name => $select
+                $name => $this->getSelect($model)
             ]
         ];
         return [$query, $json];
+    }
+
+    private function getSelect($model)
+    {
+        if (in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model), true)) {
+            return $model->getPrimaryKeyFields();
+        }
+        return ['id'];
     }
 
     /**
@@ -415,52 +422,53 @@ abstract class TestCase extends BaseTestCase
     /**
      * @param string $name
      * @param Model $model
-     * @param string[] $select
-     * @param bool $list
      * @return array
      */
-    private function createQuery(string $name, Model $model, array $select = ['id'], $list = false): array
+    private function createQuery(string $name, Model $model): array
     {
-        if ($list) {
-            $name .= 's';
-        }
-        if ($select === []) {
-            $query = '{ ' . $name . ' ';
-        } else {
-            $query = '{ ' . $name . '(';
-            $query .= implode(', ', $this->getFindBy($model, $select)). ')';
-        }
-        if ($list) {
-            $query .= '{ data';
-        }
+        $query = '{ ' . $name . '(';
+        $query .= implode(', ', $this->getFindBy($model)). ')';
         $fields = array_diff($model->getFillable(), ['tenant_id']);
-
         $query .= '{' . implode(' ', $fields) . '}}';
-        if ($list) {
-            $query .= '}';
-            $json = [
-                'data' => [
-                    $name => ['data' => [$fields]]
-                ]
-            ];
-        } else {
-            $json = [
-                'data' => [
-                    $name => $fields
-                ]
-            ];
+        $json = [
+            'data' => [
+                $name => $fields
+            ]
+        ];
+        return [$query, $json];
+    }
+
+    /**
+     * @param string $name
+     * @param Model $model
+     * @return array
+     */
+    private function createListQuery(string $name, Model $model, string $foreignKey = null): array
+    {
+        $query = '{ ' . $name ;
+        if (!is_null($foreignKey)) {
+            $query .= '(' . $foreignKey . ': '.$model->id.')';
         }
+        $query .= ' {data';
+
+        $fields = array_diff($model->getFillable(), ['tenant_id']);
+        $query .= '{' . implode(' ', $fields) . '}}';
+        $query .= '}';
+        $json = [
+            'data' => [
+                $name => ['data' => [$fields]]
+            ]
+        ];
         return [$query, $json];
     }
 
     /**
      * @param Model $model
-     * @param string[] $select
      * @return string[]
      */
-    private function getFindBy(Model $model, array $select = ['id']) {
+    private function getFindBy(Model $model) {
         $find = [];
-        foreach ($select as $field) {
+        foreach ($this->getSelect($model) as $field) {
             $value = $model->$field;
             if (is_int($value)) {
                 $find[] = $field . ':' . $value;

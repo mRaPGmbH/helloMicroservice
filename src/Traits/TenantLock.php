@@ -6,7 +6,7 @@ namespace HelloCash\HelloMicroservice\Traits;
 use HelloCash\HelloMicroservice\Scopes\TenantScope;
 use Illuminate\Database\Eloquent\Model;
 
-trait TenantScopeTrait
+trait TenantLock
 {
     public static function boot(): void
     {

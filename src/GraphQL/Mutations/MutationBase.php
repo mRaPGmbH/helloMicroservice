@@ -24,7 +24,7 @@ abstract class MutationBase
         if (!class_exists($className)) {
             throw new \RuntimeException(__CLASS__ . ': Model ' . $className . ' not found.');
         }
-        if (!in_array('HelloCash\\HelloMicroservice\\Interfaces\\CustomMutations', class_implements($className), true)) {
+        if (!in_array('HelloCash\\HelloMicroservice\\Traits\\CustomMutations', class_uses($className), true)) {
             throw new \RuntimeException(__CLASS__ . ': Model ' . $className . ' does not implement customMutations interface.');
         }
         return $className;
