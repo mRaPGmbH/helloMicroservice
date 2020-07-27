@@ -2,10 +2,12 @@
 
 namespace HelloCash\HelloMicroservice\tests;
 
+use App\Customer;
 use Exception;
 use HelloCash\HelloMicroservice\Interfaces\CustomMutations;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Testing\TestResponse;
 use Nuwave\Lighthouse\Testing\MakesGraphQLRequests;
 use Tests\CreatesApplication;
 
@@ -62,6 +64,21 @@ abstract class TestCase extends BaseTestCase
         }
     }
 
+    protected static function assertGraphQlError(TestResponse $response, string $message = null): void
+    {
+        $response->assertStatus(200);
+        $response->assertJsonStructure([
+            'errors' => []
+        ]);
+        if (!is_null($message)) {
+            $response->assertJson([
+                'errors' => [[
+                    'message' => $message
+                ]]
+            ]);
+        }
+    }
+
     /**
      * @param string $classname
      * @param string[] $select
@@ -77,34 +94,96 @@ abstract class TestCase extends BaseTestCase
      * @param string[] $select
      * @throws Exception
      */
+    protected function creationErrorTest(string $classname, array $select = ['id']): void
+    {
+        $this->creationUpdateErrorTestImplementation($classname, $select, 'create');
+    }
+
+    /**
+     * @param string $classname
+     * @param string[] $select
+     * @throws Exception
+     */
     protected function updateTest(string $classname, array $select = ['id']): void
     {
         $this->creationUpdateTestImplementation($classname, $select, 'update');
     }
 
+    /**
+     * @param string $classname
+     * @param string[] $select
+     * @throws Exception
+     */
+    protected function updateErrorTest(string $classname, array $select = ['id']): void
+    {
+        $this->creationUpdateErrorTestImplementation($classname, $select, 'update');
+    }
+
+    /**
+     * @param string $classname
+     * @param string[] $select
+     */
     protected function deletionTest(string $classname, array $select = ['id']): void
     {
-        /** @var Model $model */
-        $model = $classname::first();
+        $this->deletionTestImplementation($classname, $select, false);
+    }
+
+    /**
+     * @param string $classname
+     * @param string[] $select
+     */
+    protected function deletionErrorTest(string $classname, array $select = ['id']): void
+    {
+        $this->deletionTestImplementation($classname, $select, true);
+    }
+
+    /**
+     * @param string $classname
+     * @param string[] $select
+     * @param bool $error
+     */
+    private function deletionTestImplementation(string $classname, array $select = ['id'], $error = false): void
+    {
+        if ($error) {
+            $model = factory($classname)->make();
+            $model->id = 1;
+        } else {
+            /** @var Model $model */
+            $model = $classname::first();
+        }
         $shortClassname = $this->getShortClassname($classname);
         $query = 'mutation { delete' . $shortClassname . '(';
         $query .= implode(', ', $this->getFindBy($model, $select));
         $query .= ') { ' . implode( ', ', $select) . ' } }';
-        $json = [
-            'data' => [
-                'delete'.$shortClassname => $select
-            ]
-        ];
         $response = $this->jwt()->graphQL($query);
         $response->assertStatus(200);
-        $response->assertJsonStructure($json);
-
-        if (in_array('Illuminate\Database\Eloquent\SoftDeletes', class_uses($model))) {
-            $this->assertSoftDeleted($model);
+        if ($error) {
+            $json = [
+                'data' => [
+                    'delete'.$shortClassname => null
+                ]
+            ];
+            $response->assertJson($json);
+            $response->assertJsonMissing([
+                'errors' => [[
+                    'message' => 'Model not found.'
+                ]]
+            ]);
         } else {
-            $this->assertDeleted($model);
+            $json = [
+                'data' => [
+                    'delete'.$shortClassname => $select
+                ]
+            ];
+            $response->assertJsonStructure($json);
+            if (in_array('Illuminate\Database\Eloquent\SoftDeletes', class_uses($model))) {
+                $this->assertSoftDeleted($model);
+            } else {
+                $this->assertDeleted($model);
+            }
         }
     }
+
 
     /**
      * @param string $classname
@@ -141,11 +220,44 @@ abstract class TestCase extends BaseTestCase
     /**
      * @param string $classname
      * @param string[] $select
+     * @param string $type
+     * @throws Exception
+     */
+    private function creationUpdateErrorTestImplementation(string $classname, array $select = ['id'], string $type = 'create'): void
+    {
+        $shortClassname = $this->getShortClassname($classname);
+        $expectedError = null;
+        /** @var Model $model */
+        $model = factory($classname)->make();
+        if ($type === 'update') {
+            $query = 'mutation { update' . $shortClassname . '(';
+            if ($model instanceof CustomMutations) {
+                foreach ($select as $key) {
+                    $query .= $this->createFieldFromCasts($model, $key). ' ';
+                }
+            } else {
+                $query .= 'id:1';
+            }
+            $query .= ') { ' . implode( ', ', $select) . ' } }';
+        } else {
+            $fields = array_diff($model->getFillable(), $select, ['tenant_id']);
+            $key = array_pop($fields);
+            $query = 'mutation { create' . $shortClassname . '(';
+            $query .= $this->createFieldFromCasts($model, $key). ' ';
+            $query .= ') { ' . implode( ', ', $select) . ' } }';
+        }
+        $response = $this->jwt()->graphQL($query);
+        self::assertGraphQlError($response, $expectedError);
+    }
+
+    /**
+     * @param string $classname
+     * @param string[] $select
      * @throws Exception
      */
     protected function listTest(string $classname, array $select = ['id']): void
     {
-        $this->listReadTestImplementation($classname, $select, true);
+        $this->listReadTestImplementation($classname, $select, true, false);
     }
 
     /**
@@ -155,34 +267,75 @@ abstract class TestCase extends BaseTestCase
      */
     protected function readTest(string $classname, array $select = ['id']): void
     {
-        $this->listReadTestImplementation($classname, $select, false);
+        $this->listReadTestImplementation($classname, $select, false, false);
     }
 
     /**
      * @param string $classname
      * @param string[] $select
-     * @param bool $list
      * @throws Exception
      */
-    private function listReadTestImplementation(string $classname, array $select = ['id'], $list = false): void
+    protected function readErrorTest(string $classname, array $select = ['id']): void
+    {
+        $this->listReadTestImplementation($classname, $select, false, true);
+    }
+
+    /**
+     * @param string $classname
+     * @param string[] $select
+     * @throws Exception
+     */
+    /*
+    protected function listErrorTest(string $classname, array $select = ['id']): void
+    {
+        $this->listReadTestImplementation($classname, $select, true, true);
+    }*/
+
+    /**
+     * @param string $classname
+     * @param string[] $select
+     * @param bool $list
+     * @param bool $error
+     * @throws Exception
+     */
+    private function listReadTestImplementation(string $classname, array $select = ['id'], bool $list = false, bool $error = false): void
     {
         $compareModel = $classname::first();
         $shortClassname = lcfirst($this->getShortClassname($classname));
+        if ($error) {
+            $compareModel = factory($classname)->make();
+            $compareModel->id = 1;
+        }
         [$query, $jsonStructure] = $this->createQuery($shortClassname, $compareModel, $select, $list);
         $response = $this->jwt()->graphQL($query);
-        $response->assertStatus(200);
-        $response->assertJsonStructure($jsonStructure);
 
-        $model = new $classname();
-        if ($list) {
-            $model->fill($response->json('data')[$shortClassname.'s']['data'][0]);
+        if ($error) {
+            $response->assertStatus(200);
+            $response->assertJsonStructure([
+                'data' => [
+                    $shortClassname . ($list ? 's' : '')
+                ]
+            ]);
+            $response->assertJson([
+                'data' => [
+                    $shortClassname . ($list ? 's' : '') => null
+                ]
+            ]);
         } else {
-            $model->fill($response->json('data')[$shortClassname]);
+            $response->assertStatus(200);
+            $response->assertJsonStructure($jsonStructure);
+
+            $model = new $classname();
+            if ($list) {
+                $model->fill($response->json('data')[$shortClassname.'s']['data'][0]);
+            } else {
+                $model->fill($response->json('data')[$shortClassname]);
+            }
+            if (!$model instanceof CustomMutations) {
+                $model->id = $compareModel->id;
+            }
+            self::assertModelEqualsDatabase($model);
         }
-        if (!$model instanceof CustomMutations) {
-            $model->id = $compareModel->id;
-        }
-        self::assertModelEqualsDatabase($model);
     }
 
     /**
@@ -215,7 +368,6 @@ abstract class TestCase extends BaseTestCase
         if ($includeId) {
             $fields[] = 'id:'.$model->id;
         }
-        $casts = $model->getCasts();
         foreach ($model->getFillable() as $field) {
             if ($field === 'tenant_id') {
                 continue;
@@ -228,30 +380,36 @@ abstract class TestCase extends BaseTestCase
                 $fields[] = $field . ':null';
                 continue;
             }
-            switch ($casts[$field] ?? 'string') {
-                case 'string':
-                default:
-                    $fields[] = $field . ':"' . str_replace(['"', "\n"], ['\\"', ''], $model->$field) . '"';
-                    break;
-                case 'integer':
-                case 'real':
-                case 'float':
-                case 'double':
-                case 'timestamp':
-                    $fields[] = $field . ':' . $model->$field;
-                    break;
-                case 'boolean':
-                    $fields[] = $field . ':' . ($model->$field? 'true' : 'false');
-                    break;
-                case 'date':
-                    $fields[] = $field . ':"' . ($model->$field->format('Y-m-d')). '"';
-                    break;
-                case 'datetime':
-                    $fields[] = $field . ':"' . ($model->$field->format('Y-m-d H:i:s')) . '"';
-                    break;
-            }
+            $fields[] = $this->createFieldFromCasts($model, $field);
         }
         return $fields;
+    }
+
+    /**
+     * @param Model $model
+     * @param string $key
+     * @return string
+     */
+    private function createFieldFromCasts(Model $model, string $key): string
+    {
+        $casts = $model->getCasts();
+        switch ($casts[$key] ?? 'string') {
+            case 'string':
+            default:
+                return $key . ':"' . str_replace(['"', "\n"], ['\\"', ''], $model->$key) . '"';
+            case 'integer':
+            case 'real':
+            case 'float':
+            case 'double':
+            case 'timestamp':
+                return $key . ':' . $model->$key;
+            case 'boolean':
+                return $key . ':' . ($model->$key? 'true' : 'false');
+            case 'date':
+                return $key . ':"' . ($model->$key->format('Y-m-d')). '"';
+            case 'datetime':
+                return $key . ':"' . ($model->$key->format('Y-m-d H:i:s')) . '"';
+        }
     }
 
     /**
@@ -266,8 +424,12 @@ abstract class TestCase extends BaseTestCase
         if ($list) {
             $name .= 's';
         }
-        $query = '{ ' . $name . '(';
-        $query .= implode(', ', $this->getFindBy($model, $select)). ')';
+        if ($select === []) {
+            $query = '{ ' . $name . ' ';
+        } else {
+            $query = '{ ' . $name . '(';
+            $query .= implode(', ', $this->getFindBy($model, $select)). ')';
+        }
         if ($list) {
             $query .= '{ data';
         }
