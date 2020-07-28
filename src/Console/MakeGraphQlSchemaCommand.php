@@ -61,32 +61,51 @@ class MakeGraphQlSchemaCommand extends Command
             return;
         }
 
-        $primary =  $model->getKeyName() . ': ' . ucfirst($model->getKeyType());
+        $primary = $this->getPrimaryFields($model, ' @eq');
 
-        $schema = 'type Query {' . PHP_EOL;
+        $schema = 'extend type Query {' . PHP_EOL;
         $schema .= '    ' . lcfirst($shortClassname) . 's: [' . $shortClassname . '!] @paginate(defaultCount: 10) @guard' . PHP_EOL;
-        $schema .= '    ' . lcfirst($shortClassname) . '(' . $primary . '! @eq): ' . $shortClassname . '! @find @guard';
+        $schema .= '    ' . lcfirst($shortClassname) . '(' . $primary . '): ' . $shortClassname . '! @find @guard' . PHP_EOL;
 
-        $schema .= '}' . PHP_EOL . PHP_EOL . 'type Mutation {' . PHP_EOL;
+        if (in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model))) {
+            $primary = $this->getPrimaryFields($model);
+        }
+
+        $schema .= '}' . PHP_EOL . PHP_EOL . 'extend type Mutation {' . PHP_EOL;
         $schema .= '    create' . $shortClassname . '(' . PHP_EOL;
         $schema .= $this->getFields($model);
         $schema .= '    ): ' . $shortClassname . '! @create @guard' . PHP_EOL;
         $schema .= '    update' . $shortClassname . '(' . PHP_EOL;
-        $schema .= '        ' . $primary . '! @eq' . PHP_EOL;
+        if (!in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model))) {
+            $schema .= '        ' . $primary . PHP_EOL;
+        }
+
         $schema .= $this->getFields($model);
-        $schema .= '    ): ' . $shortClassname . '! @update @guard' . PHP_EOL;
-        $schema .= '    delete' . $shortClassname . '(' . $primary . '! @eq): ' . $shortClassname . '! @delete @guard' . PHP_EOL;
+        $schema .= '    ): ' . $shortClassname . '! ';
+        if (in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model))) {
+            $schema .= '@field(resolver: "UpdateMutation")';
+        } else {
+            $schema .= '@update';
+        }
+        $schema .= ' @guard' . PHP_EOL;
+
+
+        $schema .= '    delete' . $shortClassname . '(' . $primary . '): ' . $shortClassname . '! ';
+        if (in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model))) {
+            $schema .= '@field(resolver: "DeleteMutation")';
+        } else {
+            $schema .= '@delete';
+        }
+        $schema .= ' @guard' . PHP_EOL;
 
         $schema .= '}' . PHP_EOL . PHP_EOL . 'type ' . $shortClassname . ' {' . PHP_EOL;
-        if ($model->getKeyName() === 'id') {
+        if (!in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model))) {
             $schema .= '        id: ID!' . PHP_EOL;
-        } else {
-            $schema .= '        ' . $primary . '!' . PHP_EOL;
         }
         $schema .= $this->getFields($model, true);
         $schema .= '}';
 
-        dd($schema);
+        file_put_contents($file, $schema);
     }
 
     /**
@@ -98,41 +117,60 @@ class MakeGraphQlSchemaCommand extends Command
     protected function getFields(Model $model, bool $all = false, string $prefix = '        '): string
     {
         $schema = '';
-        $casts = $model->getCasts();
         foreach ($model->getFillable() as $field) {
-            switch ($casts[$field] ?? 'string') {
-                case 'string':
-                default:
-                    $schema .= $prefix . $field . ': String' . PHP_EOL;
-                    break;
-                case 'integer':
-                case 'timestamp':
-                    $schema .= $prefix . $field . ': Int' . PHP_EOL;
-                    break;
-                case 'real':
-                case 'float':
-                case 'double':
-                    $schema .= $prefix . $field . ': Float' . PHP_EOL;
-                    break;
-                case 'boolean':
-                    $schema .= $prefix . $field . ': Boolean' . PHP_EOL;
-                    break;
-                case 'date':
-                    $schema .= $prefix . $field . ': Date' . PHP_EOL;
-                    break;
-                case 'datetime':
-                    $schema .= $prefix . $field . ': DateTime' . PHP_EOL;
-                    break;
+            if ($field === 'tenant_id') {
+                continue;
             }
+            $schema .= $this->getSingleField($field, $model, $prefix);
         }
-
-        if ($all) {
-            if ($model->timestamps) {
-                $schema .= $prefix . 'created_at: DateTime!' . PHP_EOL;
-                $schema .= $prefix . 'updated_at: DateTime!' . PHP_EOL;
-            }
+        if ($all && $model->timestamps) {
+            $schema .= $prefix . 'created_at: DateTime!' . PHP_EOL;
+            $schema .= $prefix . 'updated_at: DateTime!' . PHP_EOL;
         }
         return $schema;
+    }
+
+    protected function getPrimaryFields(Model $model, $postfix = ''): string
+    {
+        if (in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model))) {
+            $parts = [];
+            foreach ($model->getPrimaryKeyFields() as $field) {
+                $parts[] = $this->getSingleField($field, $model, '', $postfix);
+            }
+            return implode(' ', $parts);
+        }
+        return $model->getKeyName() . ': ' . ucfirst($model->getKeyType()) . '!' . $postfix;
+    }
+
+    protected function getSingleField(string $field, Model $model, string $prefix = '        ', string $postfix = PHP_EOL): string
+    {
+        $casts = $model->getCasts();
+        $inject = '';
+        if (in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model))
+            && in_array($field, $model->getPrimaryKeyFields(), true)) {
+            $inject = '!';
+        }
+        if ($field === 'country_code') {
+            return $prefix . $field . ': CountryCode!' . $postfix;
+        }
+        switch ($casts[$field] ?? 'string') {
+            case 'string':
+            default:
+                return $prefix . $field . ': String' . $inject . $postfix;
+            case 'integer':
+            case 'timestamp':
+                return $prefix . $field . ': Int' . $inject . $postfix;
+            case 'real':
+            case 'float':
+            case 'double':
+                return $prefix . $field . ': Float' . $inject . $postfix;
+            case 'boolean':
+                return $prefix . $field . ': Boolean' . $inject . $postfix;
+            case 'date':
+                return $prefix . $field . ': Date' . $inject . $postfix;
+            case 'datetime':
+                return $prefix . $field . ': DateTime' . $inject . $postfix;
+        }
     }
 
 }
