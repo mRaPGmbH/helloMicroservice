@@ -2,10 +2,10 @@
 
 namespace HelloCash\HelloMicroservice\tests;
 
-use App\NewsletterRecipient;
 use Exception;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Nuwave\Lighthouse\Testing\MakesGraphQLRequests;
 use Tests\CreatesApplication;
@@ -86,7 +86,17 @@ abstract class TestCase extends BaseTestCase
      */
     protected function creationTest(string $classname): void
     {
-        $this->creationUpdateTestImplementation($classname, 'create');
+        $shortClassname = 'create'.$this->getShortClassname($classname);
+        $model = factory($classname)->make();
+        [$query, $jsonStructure] = $this->createMutation($shortClassname, $model, false);
+        $response = $this->jwt()->graphQL($query);
+        $this->debug($response, $query);
+        $response->assertStatus(200);
+        $response->assertJsonStructure($jsonStructure);
+        if (!in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model))) {
+            $model->id = $response->json('data')[$shortClassname]['id'];
+        }
+        self::assertModelEqualsDatabase($model);
     }
 
     /**
@@ -95,7 +105,21 @@ abstract class TestCase extends BaseTestCase
      */
     protected function creationErrorTest(string $classname): void
     {
-        $this->creationUpdateErrorTestImplementation($classname, 'create');
+        $model = factory($classname)->make();
+        $shortClassname = 'create'.$this->getShortClassname($classname);
+        $fields = array_diff($model->getFillable(), $this->getSelect($model), ['tenant_id']);
+        $key = array_pop($fields);
+        if (is_null($key)) {
+            // fallback for relations that are purely foreign_ids which are in select
+            $fields = $this->getSelect($model);
+            $key = array_pop($fields);
+        }
+        $query = 'mutation {' . $shortClassname . '(';
+        $query .= $this->createFieldFromCasts($model, $key). ' ';
+        $query .= ') { ' . implode( ', ', $this->getSelect($model)) . ' } }';
+        $response = $this->jwt()->graphQL($query);
+        $this->debug($response, $query, true);
+        self::assertGraphQlError($response);
     }
 
     /**
@@ -104,7 +128,21 @@ abstract class TestCase extends BaseTestCase
      */
     protected function updateTest(string $classname): void
     {
-        $this->creationUpdateTestImplementation($classname, 'update');
+        $shortClassname = 'update'.$this->getShortClassname($classname);
+        $model = $classname::first();
+        $new = factory($classname)->make();
+        foreach ($model->getFillable() as $field) {
+            if ($field === 'tenant_id' || in_array($field, $this->getSelect($model), true)) {
+                continue;
+            }
+            $model->$field = $new->$field;
+        }
+        [$query, $jsonStructure] = $this->createMutation($shortClassname, $model, !in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model)) );
+        $response = $this->jwt()->graphQL($query);
+        $this->debug($response, $query);
+        $response->assertStatus(200);
+        $response->assertJsonStructure($jsonStructure);
+        self::assertModelEqualsDatabase($model);
     }
 
     /**
@@ -113,139 +151,80 @@ abstract class TestCase extends BaseTestCase
      */
     protected function updateErrorTest(string $classname): void
     {
-        $this->creationUpdateErrorTestImplementation($classname, 'update');
+        $model = factory($classname)->make();
+        $shortClassname = 'update'.$this->getShortClassname($classname);
+        $query = 'mutation {' . $shortClassname . '(';
+        if (in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model))) {
+            foreach ($this->getSelect($model) as $key) {
+                $query .= $this->createFieldFromCasts($model, $key). ' ';
+            }
+        } else {
+            $query .= 'id:1';
+        }
+        $query .= ') { ' . implode( ', ', $this->getSelect($model)) . ' } }';
+        $response = $this->jwt()->graphQL($query);
+        $this->debug($response, $query, true);
+        self::assertGraphQlError($response);
     }
 
     /**
      * @param string $classname
+     * @throws Exception
      */
     protected function deletionTest(string $classname): void
     {
-        $this->deletionTestImplementation($classname, false);
+        $model = $classname::first();
+        $shortClassname = 'delete'.$this->getShortClassname($classname);
+        [$query, $json] = $this->createDeletionQuery($shortClassname, $model);
+        $response = $this->jwt()->graphQL($query);
+        $this->debug($response, $query);
+        $response->assertStatus(200);
+        $response->assertJsonStructure($json);
+        if (in_array('Illuminate\Database\Eloquent\SoftDeletes', class_uses($model))) {
+            $this->assertSoftDeleted($model);
+        } else {
+            $this->assertDeleted($model);
+        }
     }
 
     /**
      * @param string $classname
+     * @throws Exception
      */
     protected function deletionErrorTest(string $classname): void
     {
-        $this->deletionTestImplementation($classname, true);
-    }
-
-    /**
-     * @param string $classname
-     * @param bool $error
-     */
-    private function deletionTestImplementation(string $classname, $error = false): void
-    {
-        if ($error) {
-            $model = factory($classname)->make();
-            $model->id = 1;
-        } else {
-            /** @var Model $model */
-            $model = $classname::first();
-        }
-        $shortClassname = $this->getShortClassname($classname);
-        $query = 'mutation { delete' . $shortClassname . '(';
-        $query .= implode(', ', $this->getFindBy($model));
-        $query .= ') { ' . implode( ', ', $this->getSelect($model)) . ' } }';
-        $response = $this->jwt()->graphQL($query);
-        $response->assertStatus(200);
-        if ($error) {
-            $json = [
-                'data' => [
-                    'delete'.$shortClassname => null
-                ]
-            ];
-            $response->assertJson($json);
-            $response->assertJsonMissing([
-                'errors' => [[
-                    'message' => 'Model not found.'
-                ]]
-            ]);
-        } else {
-            $json = [
-                'data' => [
-                    'delete'.$shortClassname => $this->getSelect($model)
-                ]
-            ];
-            $response->assertJsonStructure($json);
-            if (in_array('Illuminate\Database\Eloquent\SoftDeletes', class_uses($model))) {
-                $this->assertSoftDeleted($model);
-            } else {
-                $this->assertDeleted($model);
-            }
-        }
-    }
-
-
-    /**
-     * @param string $classname
-     * @param string $type
-     * @throws Exception
-     */
-    private function creationUpdateTestImplementation(string $classname, string $type = 'create'): void
-    {
-        $shortClassname = $this->getShortClassname($classname);
-        if ($type === 'update') {
-            $model = $classname::first();
-            $new = factory($classname)->make();
-            foreach ($model->getFillable() as $field) {
-                if ($field === 'tenant_id' || in_array($field, $this->getSelect($model), true)) {
-                    continue;
-                }
-                $model->$field = $new->$field;
-            }
-            [$query, $jsonStructure] = $this->createMutation('update'.$shortClassname, $model, !in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model)) );
-        } else {
-            $model = factory($classname)->make();
-            [$query, $jsonStructure] = $this->createMutation('create'.$shortClassname, $model, false);
-        }
-        $response = $this->jwt()->graphQL($query);
-        $response->assertStatus(200);
-        $response->assertJsonStructure($jsonStructure);
-
-        if ($type === 'create' && !in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model))) {
-            $model->id = $response->json('data')[$type.$shortClassname]['id'];
-        }
-        self::assertModelEqualsDatabase($model);
-    }
-
-    /**
-     * @param string $classname
-     * @param string $type
-     * @throws Exception
-     */
-    private function creationUpdateErrorTestImplementation(string $classname, string $type = 'create'): void
-    {
-        $shortClassname = $this->getShortClassname($classname);
-        $expectedError = null;
-        /** @var Model $model */
         $model = factory($classname)->make();
-        if ($type === 'update') {
-            $query = 'mutation { update' . $shortClassname . '(';
-            if (in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model))) {
-                foreach ($this->getSelect($model) as $key) {
-                    $query .= $this->createFieldFromCasts($model, $key). ' ';
-                }
-            } else {
-                $query .= 'id:1';
-            }
-            $query .= ') { ' . implode( ', ', $this->getSelect($model)) . ' } }';
-        } else {
-            $fields = array_diff($model->getFillable(), $this->getSelect($model), ['tenant_id']);
-            $key = array_pop($fields);
-            if (is_null($key)) {
-                // fallback for relations that are purely foreign_ids which are in select
-                $fields = $this->getSelect($model);
-                $key = array_pop($fields);
-            }
-            $query = 'mutation { create' . $shortClassname . '(';
-            $query .= $this->createFieldFromCasts($model, $key). ' ';
-            $query .= ') { ' . implode( ', ', $this->getSelect($model)) . ' } }';
-        }
+        $model->id = 1;
+        $shortClassname = 'delete'.$this->getShortClassname($classname);
+        [$query, $json] = $this->createDeletionQuery($shortClassname, $model);
         $response = $this->jwt()->graphQL($query);
-        self::assertGraphQlError($response, $expectedError);
+        $this->debug($response, $query);
+        $response->assertStatus(200);
+        $json = [
+            'data' => [
+                $shortClassname => null
+            ]
+        ];
+        $response->assertJson($json);
+        $response->assertJsonMissing([
+            'errors' => [[
+                'message' => 'Model not found.'
+            ]]
+        ]);
+    }
+
+    private function createDeletionQuery(string $name, Model $model): array
+    {
+        $select = $this->getSelect($model);
+        $query = 'mutation {' . $name . '(';
+        $query .= implode(', ', $this->getFindBy($model));
+        $query .= ') { ' . implode( ', ', $select) . ' } }';
+        $json = [
+            'data' => [
+                $name => $select
+            ]
+        ];
+        return [$query, $json];
     }
 
     /**
@@ -254,7 +233,14 @@ abstract class TestCase extends BaseTestCase
      */
     protected function listTest(string $classname): void
     {
-        $this->listReadTestImplementation($classname, true, false);
+        $compareModel = $classname::first();
+        $shortClassname = lcfirst(Str::plural($this->getShortClassname($classname)));
+        [$query, $jsonStructure] = $this->createListQuery($shortClassname, $compareModel);
+        $response = $this->jwt()->graphQL($query);
+        $this->debug($response, $query);
+        $response->assertStatus(200);
+        $response->assertJsonStructure($jsonStructure);
+        $this->checkDataRows($classname, $response->json('data')[$shortClassname]['data']);
     }
 
     /**
@@ -265,7 +251,31 @@ abstract class TestCase extends BaseTestCase
      */
     protected function listByForeignKeyTest(string $classname, string $foreignKey, string $postFix = ''): void
     {
-        $this->listReadTestImplementation($classname, true, false, $foreignKey, $postFix);
+        $compareModel = $classname::first();
+        $shortClassname = lcfirst(Str::plural($this->getShortClassname($classname))).$postFix;
+        [$query, $jsonStructure] = $this->createListQuery($shortClassname, $compareModel, $foreignKey);
+        $response = $this->jwt()->graphQL($query);
+        $this->debug($response, $query);
+        $response->assertStatus(200);
+        $response->assertJsonStructure($jsonStructure);
+        $this->checkDataRows($classname, $response->json('data')[$shortClassname]['data']);
+    }
+
+    /**
+     * @param string $classname
+     * @param array $data
+     * @throws Exception
+     */
+    private function checkDataRows(string $classname, array $data): void
+    {
+        foreach ($data as $row) {
+            $model = new $classname();
+            $model->fill($row);
+            if (!in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model))) {
+                $model->id = $row['id'];
+            }
+            self::assertModelEqualsDatabase($model);
+        }
     }
 
     /**
@@ -274,7 +284,18 @@ abstract class TestCase extends BaseTestCase
      */
     protected function readTest(string $classname): void
     {
-        $this->listReadTestImplementation($classname, false, false);
+        $compareModel = $classname::first();
+        $shortClassname = lcfirst($this->getShortClassname($classname));
+        [$query, $jsonStructure] = $this->createQuery($shortClassname, $compareModel);
+        $response = $this->jwt()->graphQL($query);
+        $this->debug($response, $query);
+        $response->assertJsonStructure($jsonStructure);
+        $model = new $classname();
+        $model->fill($response->json('data')[$shortClassname]);
+        if (!in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model), true)) {
+            $model->id = $compareModel->id;
+        }
+        self::assertModelEqualsDatabase($model);
     }
 
     /**
@@ -283,59 +304,17 @@ abstract class TestCase extends BaseTestCase
      */
     protected function readErrorTest(string $classname): void
     {
-        $this->listReadTestImplementation($classname, false, true);
-    }
-
-    /**
-     * @param string $classname
-     * @param bool $list
-     * @param bool $error
-     * @param string|null $foreignKey
-     * @param string $postFix
-     * @throws Exception
-     */
-    private function listReadTestImplementation(string $classname, bool $list = false, bool $error = false, string $foreignKey = null, string $postFix = ''): void
-    {
-        $compareModel = $classname::first();
+        $compareModel = factory($classname)->make();
+        $compareModel->id = 1;
         $shortClassname = lcfirst($this->getShortClassname($classname));
-        if ($error) {
-            $compareModel = factory($classname)->make();
-            $compareModel->id = 1;
-        }
-        if ($list) {
-            [$query, $jsonStructure] = $this->createListQuery($shortClassname.'s'.$postFix, $compareModel, $foreignKey);
-        } else {
-            [$query, $jsonStructure] = $this->createQuery($shortClassname, $compareModel);
-        }
+        [$query, $jsonStructure] = $this->createQuery($shortClassname, $compareModel);
         $response = $this->jwt()->graphQL($query);
-
-        if ($error) {
-            $response->assertStatus(200);
-            $response->assertJsonStructure([
-                'data' => [
-                    $shortClassname . ($list ? 's'.$postFix : '')
-                ]
-            ]);
-            $response->assertJson([
-                'data' => [
-                    $shortClassname . ($list ? 's' : '') => null
-                ]
-            ]);
-        } else {
-            $response->assertStatus(200);
-            $response->assertJsonStructure($jsonStructure);
-
-            $model = new $classname();
-            if ($list) {
-                $model->fill($response->json('data')[$shortClassname.'s'.$postFix]['data'][0]);
-            } else {
-                $model->fill($response->json('data')[$shortClassname]);
-            }
-            if (!in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model))) {
-                $model->id = $compareModel->id;
-            }
-            self::assertModelEqualsDatabase($model);
-        }
+        $this->debug($response, $query);
+        $response->assertJson([
+            'data' => [
+                $shortClassname => null
+            ]
+        ]);
     }
 
     /**
@@ -441,22 +420,26 @@ abstract class TestCase extends BaseTestCase
     /**
      * @param string $name
      * @param Model $model
+     * @param string|null $foreignKey
      * @return array
      */
     private function createListQuery(string $name, Model $model, string $foreignKey = null): array
     {
-        $query = '{ ' . $name ;
+        $query = '{ ' . lcfirst($name) ;
         if (!is_null($foreignKey)) {
             $query .= '(' . $foreignKey . ': '.$model->id.')';
         }
         $query .= ' {data';
 
         $fields = array_diff($model->getFillable(), ['tenant_id']);
+        if (!in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model), true)) {
+            $fields[] = 'id';
+        }
         $query .= '{' . implode(' ', $fields) . '}}';
         $query .= '}';
         $json = [
             'data' => [
-                $name => ['data' => [$fields]]
+                $name // => ['data' => [$fields]]
             ]
         ];
         return [$query, $json];
@@ -487,6 +470,20 @@ abstract class TestCase extends BaseTestCase
     {
         $array = explode('\\', $longClassname);
         return array_pop($array);
+    }
+
+    private function debug(TestResponse $response, string $query = 'n/a', bool $ignoreErrors = false): void
+    {
+        if ($response->status() === 500) {
+            throw $response->exception;
+        }
+        $json = $response->json();
+        if (isset($json['errors'][0])
+            && (strpos($json['errors'][0]['message'], 'Syntax Error') === 0 || !$ignoreErrors)
+        ) {
+            throw new Exception('GraphGL Error: ' . $json['errors'][0]['message']. ' - Query was: '.$query);
+        }
+
     }
 
 }

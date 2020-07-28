@@ -6,6 +6,7 @@ namespace HelloCash\HelloMicroservice\Console;
 
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class MakeGraphQlSchemaCommand extends Command
 {
@@ -64,8 +65,8 @@ class MakeGraphQlSchemaCommand extends Command
         $primary = $this->getPrimaryFields($model, ' @eq');
 
         $schema = 'extend type Query {' . PHP_EOL;
-        $schema .= '    ' . lcfirst($shortClassname) . 's: [' . $shortClassname . '!] @paginate(defaultCount: 10) @guard' . PHP_EOL;
-        $schema .= '    ' . lcfirst($shortClassname) . '(' . $primary . '): ' . $shortClassname . '! @find @guard' . PHP_EOL;
+        $schema .= '    ' . Str::plural(lcfirst($shortClassname)) . ': [' . $shortClassname . '] @paginate(defaultCount: 10) @guard' . PHP_EOL;
+        $schema .= '    ' . lcfirst($shortClassname) . '(' . $primary . '): ' . $shortClassname . ' @find @guard' . PHP_EOL;
 
         if (in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model))) {
             $primary = $this->getPrimaryFields($model);
@@ -90,7 +91,7 @@ class MakeGraphQlSchemaCommand extends Command
         $schema .= ' @guard' . PHP_EOL;
 
 
-        $schema .= '    delete' . $shortClassname . '(' . $primary . '): ' . $shortClassname . '! ';
+        $schema .= '    delete' . $shortClassname . '(' . $primary . '): ' . $shortClassname . ' ';
         if (in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model))) {
             $schema .= '@field(resolver: "DeleteMutation")';
         } else {
@@ -105,6 +106,10 @@ class MakeGraphQlSchemaCommand extends Command
         $schema .= $this->getFields($model, true);
         $schema .= '}';
 
+        if (!file_exists($file)) {
+            $schemaFile = $path . '/schema.graphql';
+            file_put_contents($schemaFile, '#import ' .lcfirst($shortClassname) . '.graphql',FILE_APPEND);
+        }
         file_put_contents($file, $schema);
     }
 
