@@ -107,7 +107,7 @@ class MakeGraphQlSchemaCommand extends Command
         $schema .= '}';
 
         if (!file_exists($file)) {
-            $schemaFile = $path . '/schema.graphql';
+            $schemaFile = $path . '/schema.graphql' . PHP_EOL;
             file_put_contents($schemaFile, '#import ' .lcfirst($shortClassname) . '.graphql',FILE_APPEND);
         }
         file_put_contents($file, $schema);
