@@ -20,10 +20,4 @@ abstract class BaseEnum
         return $hash;
     }
 
-    public static function getCountryNameForCode($code)
-    {
-        $hash = self::getAsHash();
-        return $hash[$code] ?? $hash['XX'];
-    }
-
 }
