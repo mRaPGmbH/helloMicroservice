@@ -25,7 +25,7 @@ class UpdateMutation extends MutationBase
             $className = $this->getClassName($resolveInfo);
             $model = $className::queryForMutations($args)->firstOrFail();
             foreach ($model->getFillable() as $fillable) {
-                if (isset($args[$fillable])) {
+                if (array_key_exists($fillable, $args)) {
                     $model->$fillable = $args[$fillable];
                 }
             }
