@@ -30,7 +30,7 @@ class ClientAwareErrorHandler implements ErrorHandler
 
         if ($newException) {
             $extensions = $error->getExtensions();
-            if (!AppHelper::isProduction()) {
+            if (env('APP_ENV') !== 'production') {
                 $extensions['originalMessage'] = $exception->getMessage();
             }
             $error = new Error($newException->getMessage(), $error->getNodes(), $error->getSource(), $error->getPositions(), $error->getPath(), $newException, $extensions);
