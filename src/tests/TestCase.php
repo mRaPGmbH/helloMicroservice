@@ -358,7 +358,9 @@ abstract class TestCase extends BaseTestCase
             if ($field === 'tenant_id') {
                 continue;
             }
-            if ($field === 'country_code') {
+            if ($field === 'country_code'
+                || $field === 'currency'
+            ) {
                 $fields[] = $field . ':' . $model->$field. ' ';
                 continue;
             }
