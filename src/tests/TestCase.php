@@ -65,6 +65,10 @@ abstract class TestCase extends BaseTestCase
         }
     }
 
+    /**
+     * @param TestResponse $response
+     * @param string|null $message
+     */
     protected static function assertGraphQlError(TestResponse $response, string $message = null): void
     {
         $response->assertStatus(200);
@@ -213,6 +217,11 @@ abstract class TestCase extends BaseTestCase
         ]);
     }
 
+    /**
+     * @param string $name
+     * @param Model $model
+     * @return array
+     */
     private function createDeletionQuery(string $name, Model $model): array
     {
         $select = $this->getSelect($model);
@@ -335,7 +344,11 @@ abstract class TestCase extends BaseTestCase
         return [$query, $json];
     }
 
-    private function getSelect($model)
+    /**
+     * @param $model
+     * @return string[]
+     */
+    private function getSelect(Model $model): array
     {
         if (in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model), true)) {
             return $model->getPrimaryKeyFields();
@@ -350,6 +363,7 @@ abstract class TestCase extends BaseTestCase
      */
     private function getFields(Model $model, bool $includeId = false): array
     {
+        $schema = $this->getFieldsSchema($model);
         $fields = [];
         if ($includeId) {
             $fields[] = 'id:'.$model->id;
@@ -358,9 +372,7 @@ abstract class TestCase extends BaseTestCase
             if ($field === 'tenant_id') {
                 continue;
             }
-            if ($field === 'country_code'
-                || $field === 'currency'
-            ) {
+            if ($schema[$field] === 'ENUM') {
                 $fields[] = $field . ':' . $model->$field. ' ';
                 continue;
             }
@@ -369,6 +381,33 @@ abstract class TestCase extends BaseTestCase
                 continue;
             }
             $fields[] = $this->createFieldFromCasts($model, $field);
+        }
+        return $fields;
+    }
+
+    /**
+     * uses introspection to get information about the schema and then extracts information
+     * about the fields of the type which matches the given model
+     *
+     * @param Model $model
+     * @return array
+     */
+    private function getFieldsSchema(Model $model): array
+    {
+        $json = json_decode($this->introspect()->content());
+        $schemaFields = null;
+        foreach ($json->data->__schema->types as $type) {
+            if ($type->name === $this->getShortClassname(get_class($model))) {
+                $schemaFields = $type->fields;
+            }
+        }
+        $fields = [];
+        foreach ($schemaFields as $field) {
+            if ($field->type->kind === 'NON_NULL') {
+                $fields[$field->name] = $field->type->ofType->kind;
+            } else {
+                $fields[$field->name] = $field->type->kind;
+            }
         }
         return $fields;
     }
@@ -474,6 +513,12 @@ abstract class TestCase extends BaseTestCase
         return array_pop($array);
     }
 
+    /**
+     * @param TestResponse $response
+     * @param string $query
+     * @param bool $ignoreErrors
+     * @throws Exception
+     */
     private function debug(TestResponse $response, string $query = 'n/a', bool $ignoreErrors = false): void
     {
         if ($response->status() === 500) {
@@ -483,7 +528,7 @@ abstract class TestCase extends BaseTestCase
         if (isset($json['errors'][0])
             && (strpos($json['errors'][0]['message'], 'Syntax Error') === 0 || !$ignoreErrors)
         ) {
-            throw new Exception('GraphGL Error: ' . $json['errors'][0]['message']. ' - Query was: '.$query);
+            throw new Exception('GraphQL Error: ' . $json['errors'][0]['message']. ' - Query was: '.$query);
         }
 
     }
