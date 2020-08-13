@@ -27,37 +27,51 @@ class JwtUser implements Authenticatable
      */
     public function getClaim($key)
     {
-        if (isset($this->payload[$key])) {
-            return $this->payload[$key];
-        }
-        return null;
+        return $this->payload[$key] ?? null;
     }
 
-
-    public function getAuthIdentifierName()
+    /**
+     * @return string
+     */
+    public function getAuthIdentifierName(): string
     {
         return '';
     }
 
-    public function getAuthIdentifier()
+    /**
+     * @return int
+     */
+    public function getAuthIdentifier(): int
     {
         return 1;
     }
 
-    public function getAuthPassword()
+    /**
+     * @return string
+     */
+    public function getAuthPassword(): string
     {
         return '';
     }
 
-    public function getRememberToken()
+    /**
+     *
+     */
+    public function getRememberToken(): void
     {
     }
 
-    public function setRememberToken($value)
+    /**
+     * @param string $value
+     */
+    public function setRememberToken($value): void
     {
     }
 
-    public function getRememberTokenName()
+    /**
+     *
+     */
+    public function getRememberTokenName(): void
     {
     }
 
