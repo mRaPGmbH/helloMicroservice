@@ -8,6 +8,10 @@ use GraphQL\Type\Definition\EnumType;
 
 class Countries extends BaseEnum
 {
+
+    /**
+     * @return EnumType
+     */
     public static function get(): EnumType
     {
         return new EnumType([
@@ -1026,13 +1030,17 @@ class Countries extends BaseEnum
         ]);
     }
 
-    public static function getCountryNameForCode($code)
+    /**
+     * @param string $code
+     * @return string
+     */
+    public static function getCountryNameForCode(string $code): string
     {
         $hash = self::getAsHash();
         return $hash[$code] ?? $hash['XX'];
     }
 
-    protected static $alpha2to3 = [
+    protected static array $alpha2to3 = [
         'AF' => 'AFG',
         'AL' => 'ALB',
         'DZ' => 'DZA',
@@ -1283,19 +1291,64 @@ class Countries extends BaseEnum
         'ZW' => 'ZWE',
         'AX' => 'ALA'
     ];
-    protected static $alpha3to2 = null;
 
-    public static function convertAlpha2ToAlpha3($twoLetterCode)
+    /** @var null|array */
+    protected static ?array $alpha3to2 = null;
+
+    /**
+     * @param string $twoLetterCode
+     * @return string
+     */
+    public static function convertAlpha2ToAlpha3(string $twoLetterCode): string
     {
         return self::$alpha2to3[$twoLetterCode] ?? 'XXX';
     }
 
-    public static function convertAlpha3ToAlpha2($threeLetterCode)
+    /**
+     * @param string $threeLetterCode
+     * @return string
+     */
+    public static function convertAlpha3ToAlpha2(string $threeLetterCode): string
     {
         if (is_null(self::$alpha3to2)) {
             self::$alpha3to2 = array_flip(self::$alpha2to3);
         }
         return self::$alpha3to2[$threeLetterCode] ?? 'XX';
+    }
+
+    /**
+     * @param string $countryName
+     * @return string
+     */
+    public static function guessCountryCode(string $countryName): string
+    {
+        $countries = array_flip(self::getAsHash());
+        if (isset($countries[$countryName])) {
+            return $countries[$countryName];
+        }
+        $parts = [];
+        foreach ($countries as $name => $code) {
+            $part = explode(',', $name, 1)[0];
+            $part = trim(explode('(', $part, 1)[0]);
+            $parts[$code] = $part;
+        }
+
+        foreach ($parts as $code => $part) {
+            if ($countryName === $part) {
+                return $code;
+            }
+        }
+        foreach ($parts as $code => $part) {
+            if (strpos($part, $countryName) !== false || (strlen($countryName) > 3 && strpos($countryName, $part) !== false)) {
+                return $code;
+            }
+        }
+        foreach ($parts as $code => $part) {
+            if (strlen($countryName) > 3 && soundex($part) === soundex($countryName)) {
+                return $code;
+            }
+        }
+        return 'XX';
     }
 
 }

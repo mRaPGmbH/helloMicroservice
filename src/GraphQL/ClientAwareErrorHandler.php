@@ -5,7 +5,6 @@ namespace HelloCash\HelloMicroservice\GraphQL;
 
 
 use HelloCash\HelloMicroservice\Exceptions\ClientAwareException;
-use App\Helpers\AppHelper;
 use Closure;
 use GraphQL\Error\Error;
 use Illuminate\Database\Eloquent\ModelNotFoundException;

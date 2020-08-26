@@ -32,13 +32,27 @@ abstract class TestCase extends BaseTestCase
         return $this->withHeader('Authorization', 'Bearer '.$this->getToken());
     }
 
+    protected function jwtGuest(): TestCase
+    {
+        return $this->withHeader('Authorization', 'Bearer '.$this->getGuestToken());
+    }
+
     /**
      * @return string
      */
     protected function getToken(): string
     {
-        // this token expires in 2030
+        // token with adm=true, expires in 2030
         return 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOjEyMywiYXVkIjoiaGVsbG9DYXNoIiwidGlkIjoxLCJhZG0iOnRydWUsImlzcyI6Imh0dHA6XC9cL2xvY2FsaG9zdDoxMDIwMVwvdG9rZW4iLCJpYXQiOjE1OTczMDY4MTksImV4cCI6MTkwNDg5MDgxOSwibmJmIjoxNTk3MzA2ODE5LCJqdGkiOiJKQ2F1YjExNXhLTXZ3bmdaIn0.CoK4Tb7U6AFHQ95cJaq_CApL1N3eHeUe3cPD4H6bafe4yUq6dVpmKPBtPkpfo_Vl3tWNGA868oCK4SI5ibv-T2oH0bQOnC0lP0liXtoS83cTr0SqTOZTcuH9ojmi_4MJ_GwxSiIgHhH8d-7PvQtKboYX-6NSTMpiOKz_QZnfjHaiiJ31w5cBkav-JHd64dcgNzWVo-BpmIIBYoblGaByOPzYJRhWH7Xho03AXKgEzsXUDeNfrvgtN-fF9zeXRVGMgCvZUs4jq3_uRmLXO3aNDLMBCmpBMdwypYoyyI7PTwieadH9PZkr8r2uBZMRPjKX8l_F43mV8FGa1T-b6G5z5A';
+    }
+
+    /**
+     * @return string
+     */
+    protected function getGuestToken(): string
+    {
+        // token without adm claim, expires in 2030
+        return 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOjEyMywiYXVkIjoiZm9vIiwidGlkIjoxLCJpc3MiOiJodHRwOlwvXC9sb2NhbGhvc3Q6ODA4MCIsImlhdCI6MTU5MzUwOTYxNSwiZXhwIjoxOTAxMDkzNjE1LCJuYmYiOjE1OTM1MDk2MTUsImp0aSI6Inh4MHFYNzMydTVSdGFBNDkifQ.KNOhgi8OzGNrWXT0T0a66Ifk1AX-q2PFGo6YEskz9aHrO4yepK5HmxHyYval6RxjvV22z4p4r4Z_h1EtSUJHovZviWBzXgiOxQXAUlnBWJebpl256D5u0b7JDx2mOR6VZuu6nCpEGr6lq38VuW_yiVyJLhTdvfLVzF6rEFsnI54jBUlK1k5zmPDImzBJUoPa-BvAgOwLUfvDdiudsMs-a3tiZ5me7JmRaktPq6s_dGGjWVzeVAYD8rfs-WlHUJg0DkNbQWN9iPdnChryopwE7KjWZBKQPSH8RNuWd_eC0FQN97mcfPIAs_FBqiOQP0C8p1_2bvw8VpcGBp88DDPlZg';
     }
 
     /**
