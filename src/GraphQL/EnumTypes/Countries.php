@@ -4,7 +4,9 @@
 namespace HelloCash\HelloMicroservice\GraphQL\EnumTypes;
 
 
+use dautkom\bmdm\BMDM;
 use GraphQL\Type\Definition\EnumType;
+use hollodotme\ColognePhonetic\ColognePhonetic;
 
 class Countries extends BaseEnum
 {
@@ -1318,9 +1320,10 @@ class Countries extends BaseEnum
 
     /**
      * @param string $countryName
+     * @param bool $strict
      * @return string
      */
-    public static function guessCountryCode(string $countryName): string
+    public static function guessCountryCode(string $countryName, bool $strict = false): string
     {
         $countries = array_flip(self::getAsHash());
         if (isset($countries[$countryName])) {
@@ -1343,12 +1346,28 @@ class Countries extends BaseEnum
                 return $code;
             }
         }
-        foreach ($parts as $code => $part) {
-            if (strlen($countryName) > 3 && soundex($part) === soundex($countryName)) {
-                return $code;
+        if (!$strict && strlen($countryName) > 3) {
+            foreach ($parts as $code => $part) {
+                // english "sound-alike" comparison (soundex)
+                if (soundex($part) === soundex($countryName)) {
+                    return $code;
+                }
+            }
+            $colognePhonetic = new ColognePhonetic('UTF-8');
+            foreach ($parts as $code => $part) {
+                // german "sound-alike" comparison (Kölner Phonetik)
+                if ($colognePhonetic->getWordIndex($part) === $colognePhonetic->getWordIndex($countryName)) {
+                    return $code;
+                }
+            }
+            $bmdm = new BMDM();
+            foreach ($parts as $code => $part) {
+                // slavic language "sound-alike" comparison (Beider-Morse)
+                if ($bmdm->set($part)->soundex() === $bmdm->set($countryName)->soundex()) {
+                    return $code;
+                }
             }
         }
         return 'XX';
     }
-
 }
