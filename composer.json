@@ -15,7 +15,9 @@
             "HelloCash\\HelloMicroservice\\": "src/"
         }
     },
-    "require": {},
+    "require": {
+        "umpirsky/country-list": "^2.0"
+    },
     "extra": {
         "laravel": {
             "providers": [

@@ -11,7 +11,7 @@ abstract class BaseEnum
 
     abstract static function get(): EnumType;
 
-    public static function getAsHash(): array
+    public static function getAsHash($lang = 'en'): array
     {
         $hash = [];
         foreach (static::get()->getValues() as $type) {

@@ -7,6 +7,7 @@ namespace HelloCash\HelloMicroservice\GraphQL\EnumTypes;
 use dautkom\bmdm\BMDM;
 use GraphQL\Type\Definition\EnumType;
 use hollodotme\ColognePhonetic\ColognePhonetic;
+use JsonException;
 
 class Countries extends BaseEnum
 {
@@ -1325,7 +1326,21 @@ class Countries extends BaseEnum
      */
     public static function guessCountryCode(string $countryName, bool $strict = false): string
     {
+        if (empty($countryName)) {
+            return 'XX';
+        }
         $countries = array_flip(self::getAsHash());
+        if (strlen($countryName) === 2) {
+            $countryCodes = array_values($countries);
+            if (in_array($countryName, $countryCodes, true)) {
+                return $countryName;
+            }
+            return 'XX';
+        }
+        if (strlen($countryName) === 3) {
+            return self::convertAlpha3ToAlpha2($countryName);
+        }
+
         if (isset($countries[$countryName])) {
             return $countries[$countryName];
         }
@@ -1370,4 +1385,21 @@ class Countries extends BaseEnum
         }
         return 'XX';
     }
+
+    /**
+     * @param string $lang
+     * @return array
+     * @throws JsonException
+     */
+    public static function getAsHash($lang = 'en'): array
+    {
+        $hash = parent::getAsHash();
+        if ($lang === 'en') {
+            return $hash;
+        }
+        $file = __DIR__ .'/../../../../../umpirsky/country-list/data/' . $lang . '/country.json';
+        $translation = json_decode(file_get_contents($file), true, 512, JSON_THROW_ON_ERROR);
+        return array_intersect_key($translation, $hash);
+    }
+
 }
