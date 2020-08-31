@@ -4,9 +4,7 @@
 namespace HelloCash\HelloMicroservice\GraphQL\EnumTypes;
 
 
-use dautkom\bmdm\BMDM;
 use GraphQL\Type\Definition\EnumType;
-use hollodotme\ColognePhonetic\ColognePhonetic;
 use JsonException;
 
 class Countries extends BaseEnum
@@ -1036,6 +1034,7 @@ class Countries extends BaseEnum
     /**
      * @param string $code
      * @return string
+     * @throws JsonException
      */
     public static function getCountryNameForCode(string $code): string
     {
@@ -1329,7 +1328,8 @@ class Countries extends BaseEnum
         if (empty($countryName)) {
             return 'XX';
         }
-        $countries = array_flip(self::getAsHash());
+        //$countries = array_flip(self::getAsHash());
+        $countries = self::getMultiLanguageList();
         if (strlen($countryName) === 2) {
             $countryCodes = array_values($countries);
             if (in_array($countryName, $countryCodes, true)) {
@@ -1363,22 +1363,7 @@ class Countries extends BaseEnum
         }
         if (!$strict && strlen($countryName) > 3) {
             foreach ($parts as $code => $part) {
-                // english "sound-alike" comparison (soundex)
                 if (soundex($part) === soundex($countryName)) {
-                    return $code;
-                }
-            }
-            $colognePhonetic = new ColognePhonetic('UTF-8');
-            foreach ($parts as $code => $part) {
-                // german "sound-alike" comparison (Kölner Phonetik)
-                if ($colognePhonetic->getWordIndex($part) === $colognePhonetic->getWordIndex($countryName)) {
-                    return $code;
-                }
-            }
-            $bmdm = new BMDM();
-            foreach ($parts as $code => $part) {
-                // slavic language "sound-alike" comparison (Beider-Morse)
-                if ($bmdm->set($part)->soundex() === $bmdm->set($countryName)->soundex()) {
                     return $code;
                 }
             }
@@ -1400,6 +1385,33 @@ class Countries extends BaseEnum
         $file = __DIR__ .'/../../../../../umpirsky/country-list/data/' . $lang . '/country.json';
         $translation = json_decode(file_get_contents($file), true, 512, JSON_THROW_ON_ERROR);
         return array_intersect_key($translation, $hash);
+    }
+
+    /** @var array|null */
+    protected static ?array $multiLanguageList = null;
+
+    /**
+     * @return array
+     * @throws JsonException
+     */
+    public static function getMultiLanguageList(): array
+    {
+        if (is_array(self::$multiLanguageList)) {
+            return self::$multiLanguageList;
+        }
+        self::$multiLanguageList = [];
+        $languages = ['af', 'ak', 'am', 'ar', 'as', 'az', 'be', 'bg', 'bm', 'bn', 'bo', 'br', 'bs', 'ca', 'ce', 'cs',
+            'cy', 'da', 'de', 'dz', 'ee', 'el', 'en', 'eo', 'es', 'et', 'eu', 'fa', 'ff', 'fi', 'fo', 'fr', 'fy', 'ga',
+            'gd', 'gl', 'gu', 'gv', 'ha', 'he', 'hi', 'hr', 'hu', 'hy', 'ia', 'id', 'ig', 'ii', 'is', 'it', 'ja',
+            'jv', 'ka', 'ki', 'kk', 'kl', 'km', 'kn', 'ko', 'ks', 'ku', 'kw', 'ky', 'lb', 'lg', 'ln', 'lo', 'lt', 'lu',
+            'lv', 'mg', 'mi', 'mk', 'ml', 'mn', 'mr', 'ms', 'mt', 'my', 'nb', 'nd', 'ne', 'nl', 'nn', 'no', 'om', 'or',
+            'os', 'pa', 'pl', 'ps', 'pt', 'qu', 'rm', 'rn', 'ro', 'ru', 'rw', 'sd', 'se', 'sg', 'sh', 'si', 'sk', 'sl',
+            'sn', 'so', 'sq', 'sr', 'sv', 'sw', 'ta', 'te', 'tg', 'th', 'ti', 'tk', 'tl', 'to', 'tr', 'tt', 'ug', 'uk',
+            'ur', 'uz', 'vi', 'wo', 'xh', 'yi', 'yo', 'zh', 'zu'];
+        foreach ($languages as $language) {
+            self::$multiLanguageList = array_merge(self::$multiLanguageList, array_flip(self::getAsHash($language)));
+        }
+        return self::$multiLanguageList;
     }
 
 }

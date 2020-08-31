@@ -37,6 +37,17 @@ abstract class TestCase extends BaseTestCase
         return $this->withHeader('Authorization', 'Bearer '.$this->getGuestToken());
     }
 
+    protected function jwtExpired(): TestCase
+    {
+        return $this->withHeader('Authorization', 'Bearer '.$this->getExpiredToken());
+    }
+
+    protected function jwtCorrupted(): TestCase
+    {
+        return $this->withHeader('Authorization', 'Bearer '.$this->getCorruptedToken());
+    }
+
+
     /**
      * @return string
      */
@@ -56,10 +67,28 @@ abstract class TestCase extends BaseTestCase
     }
 
     /**
+     * @return string
+     */
+    protected function getExpiredToken(): string
+    {
+        // token that has expired
+        return 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOjEyMywiYXVkIjoiaGVsbG9DYXNoIiwidGlkIjoxLCJhZG0iOnRydWUsImlzcyI6Imh0dHA6XC9cL2xvY2FsaG9zdDoxMDIwMVwvdG9rZW4iLCJpYXQiOjE1OTg4ODI1MDMsImV4cCI6MTU5ODg4MjU2MywibmJmIjoxNTk4ODgyNTAzLCJqdGkiOiJEQUl6RjFnMllWYllwSlE5In0.ayQutwNvaEgdrYsEwCUI5XhIvFcr5TLRh4FsAsD5arkcYgnR55KMPsGFNgDjY4slI45O7EgJSWswHAnITNuuXcK3JBUx1z7G3VmvYHdD-OEVr29DKUZThU3gykmceQGsjF1Veq4bDtux0XCHZaj5dhAUPd_O9-7y8bIkWhxjRTyheytXwCTi3bMubJ5chYS1R0WfAmdt4GJnbW0n7UzG-lAM6PYYsnfYzXLHqCfDxUML-w2xqJHBfW89G3V8Fef3rclaMKF5UxiKx7nf_i-mWAgBjQTCicgOVtbtHRY4GbQg5Xb4jkD7n9-84gOaWMHd1oZRAXsm4rXKeYXCEbb3iQ';
+    }
+
+    /**
+     * @return string
+     */
+    protected function getCorruptedToken(): string
+    {
+        // data has been hacked, signature does not match
+        return 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOjEyMywiYXVkIjoiaGVsbG9DYXNoIiwidGlkIjoxLCJhZG0iOnRydWUsImlzcyI6Imh0dHA6XC9cL2xvY2FsaG9zdDoxMDIwMVwvdG9rZW4iLCJpYXQiOjE1OTczMDY4MTksImV4cCI6MTkwNDg5MDgxOSwibmJmIjoxNTk3MzA2ODE5LCJqdGkiOiJKQ2F1YjExNXhLTXZ3bmdaIn0.KNOhgi8OzGNrWXT0T0a66Ifk1AX-q2PFGo6YEskz9aHrO4yepK5HmxHyYval6RxjvV22z4p4r4Z_h1EtSUJHovZviWBzXgiOxQXAUlnBWJebpl256D5u0b7JDx2mOR6VZuu6nCpEGr6lq38VuW_yiVyJLhTdvfLVzF6rEFsnI54jBUlK1k5zmPDImzBJUoPa-BvAgOwLUfvDdiudsMs-a3tiZ5me7JmRaktPq6s_dGGjWVzeVAYD8rfs-WlHUJg0DkNbQWN9iPdnChryopwE7KjWZBKQPSH8RNuWd_eC0FQN97mcfPIAs_FBqiOQP0C8p1_2bvw8VpcGBp88DDPlZg';
+    }
+
+    /**
      * @param Model $model
      * @throws Exception
      */
-    protected static function assertModelEqualsDatabase(Model $model): void
+    public static function assertModelEqualsDatabase(Model $model): void
     {
         $compareModel = null;
         if (in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model), true)) {
