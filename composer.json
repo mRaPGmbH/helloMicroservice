@@ -16,7 +16,12 @@
         }
     },
     "require": {
-        "umpirsky/country-list": "^2.0"
+        "umpirsky/country-list": "^2.0",
+        "nuwave/lighthouse": "^4.14",
+        "sentry/sentry-laravel": "1.8.0",
+        "laravel/scout": "^8.2",
+        "tymon/jwt-auth": "^1.0",
+        "yab/laravel-scout-mysql-driver": "^3.0"
     },
     "extra": {
         "laravel": {
