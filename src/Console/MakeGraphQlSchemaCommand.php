@@ -26,24 +26,19 @@ class MakeGraphQlSchemaCommand extends Command
      */
     protected $description = 'Create basic GraphQL schema template from existing model';
 
-    /**
-     * Create a new command instance.
-     *
-     * @return void
-     */
-    public function __construct()
-    {
-        parent::__construct();
-    }
+    protected $classname = '';
+    protected $model = null;
+    protected $primary = '';
+
 
     /**
      * Execute the console command.
      *
-     * @return mixed
      */
-    public function handle()
+    public function handle(): void
     {
         $shortClassname = $this->argument('model');
+        $this->classname = $shortClassname;
         $classname = '\\App\\'.$shortClassname;
         if (!class_exists($classname)) {
             $this->error('Model "'.$shortClassname.'" not found.');
@@ -55,6 +50,8 @@ class MakeGraphQlSchemaCommand extends Command
             $this->error('Class "'.$shortClassname.'" is not a Model.');
             return;
         }
+        $this->model = $model;
+
         $path = base_path('graphql');
         $file = $path . '/' . lcfirst($shortClassname) . '.graphql';
         if (file_exists($file) && !$this->option('overwrite')) {
@@ -62,49 +59,22 @@ class MakeGraphQlSchemaCommand extends Command
             return;
         }
 
-        $primary = $this->getPrimaryFields($model, ' @eq');
-
+        $this->primary = $this->getPrimaryFields($model, ' @eq');
         $schema = 'extend type Query {' . PHP_EOL;
-        $schema .= '    ' . Str::plural(lcfirst($shortClassname)) . ': [' . $shortClassname . '] @paginate(defaultCount: 10) @guard' . PHP_EOL;
-        $schema .= '    ' . lcfirst($shortClassname) . '(' . $primary . '): ' . $shortClassname . ' @find @guard' . PHP_EOL;
+        $schema .= $this->buildListQuery();
+        $schema .= $this->buildFindQuery();
 
-        if (in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model))) {
-            $primary = $this->getPrimaryFields($model);
+        if (in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model), true)) {
+            $this->primary = $this->getPrimaryFields($model);
         }
-
         $schema .= '}' . PHP_EOL . PHP_EOL . 'extend type Mutation {' . PHP_EOL;
-        $schema .= '    create' . $shortClassname . '(' . PHP_EOL;
-        $schema .= $this->getFields($model);
-        $schema .= '    ): ' . $shortClassname . '! @create @guard' . PHP_EOL;
-        $schema .= '    update' . $shortClassname . '(' . PHP_EOL;
-        if (!in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model))) {
-            $schema .= '        ' . $primary . PHP_EOL;
-        }
+        $schema .= $this->buildCreateMutation();
+        $schema .= $this->buildUpdateMutation();
+        $schema .= $this->buildDeleteMutation();
+        $schema .= '}' . PHP_EOL . PHP_EOL;
+        $schema .= $this->buildTypeDefinition();
 
-        $schema .= $this->getFields($model);
-        $schema .= '    ): ' . $shortClassname . '! ';
-        if (in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model))) {
-            $schema .= '@field(resolver: "UpdateMutation")';
-        } else {
-            $schema .= '@update';
-        }
-        $schema .= ' @guard' . PHP_EOL;
-
-
-        $schema .= '    delete' . $shortClassname . '(' . $primary . '): ' . $shortClassname . ' ';
-        if (in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model))) {
-            $schema .= '@field(resolver: "DeleteMutation")';
-        } else {
-            $schema .= '@delete';
-        }
-        $schema .= ' @guard' . PHP_EOL;
-
-        $schema .= '}' . PHP_EOL . PHP_EOL . 'type ' . $shortClassname . ' {' . PHP_EOL;
-        if (!in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model))) {
-            $schema .= '        id: ID!' . PHP_EOL;
-        }
-        $schema .= $this->getFields($model, true);
-        $schema .= '}';
+        dd($schema);
 
         if (!file_exists($file)) {
             $schemaFile = $path . '/schema.graphql';
@@ -112,6 +82,84 @@ class MakeGraphQlSchemaCommand extends Command
         }
         file_put_contents($file, $schema);
     }
+
+    /**
+     * @return string
+     */
+    protected function buildListQuery(): string
+    {
+        return '    ' . Str::plural(lcfirst($this->classname)) . ': [' . $this->classname . '] @paginate(defaultCount: 10) @guard' . PHP_EOL;
+    }
+
+    /**
+     * @return string
+     */
+    protected function buildFindQuery(): string
+    {
+        return '    ' . lcfirst($this->classname) . '(' . $this->primary . '): ' . $this->classname . ' @find @guard' . PHP_EOL;
+    }
+
+    /**
+     * @return string
+     */
+    protected function buildCreateMutation(): string
+    {
+        $schema = '    create' . $this->classname . '(' . PHP_EOL;
+        $schema .= $this->getFields($this->model);
+        $schema .= '    ): ' . $this->classname . '! @create @guard' . PHP_EOL;
+        return $schema;
+    }
+
+    /**
+     * @return string
+     */
+    protected function buildUpdateMutation(): string
+    {
+        $schema = '    update' . $this->classname . '(' . PHP_EOL;
+        if (!in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($this->model), true)) {
+            $schema .= '        ' . $this->primary . PHP_EOL;
+        }
+
+        $schema .= $this->getFields($this->model);
+        $schema .= '    ): ' . $this->classname . '! ';
+        if (in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($this->model), true)) {
+            $schema .= '@field(resolver: "UpdateMutation")';
+        } else {
+            $schema .= '@update';
+        }
+        $schema .= ' @guard' . PHP_EOL;
+        return $schema;
+    }
+
+    /**
+     * @return string
+     */
+    protected function buildDeleteMutation(): string
+    {
+        $schema = '    delete' . $this->classname . '(' . $this->model . '): ' . $this->classname . ' ';
+        if (in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($this->model), true)) {
+            $schema .= '@field(resolver: "DeleteMutation")';
+        } else {
+            $schema .= '@delete';
+        }
+        $schema .= ' @guard' . PHP_EOL;
+        return $schema;
+    }
+
+    /**
+     * @return string
+     */
+    protected function buildTypeDefinition(): string
+    {
+        $schema = 'type ' . $this->classname . ' {' . PHP_EOL;
+        if (!in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($this->model), true)) {
+            $schema .= '        id: ID!' . PHP_EOL;
+        }
+        $schema .= $this->getFields($this->model, true);
+        $schema .= '}';
+        return $schema;
+    }
+
 
     /**
      * @param Model $model
@@ -135,6 +183,12 @@ class MakeGraphQlSchemaCommand extends Command
         return $schema;
     }
 
+
+    /**
+     * @param Model $model
+     * @param string $postfix
+     * @return string
+     */
     protected function getPrimaryFields(Model $model, $postfix = ''): string
     {
         if (in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model))) {
