@@ -27,8 +27,6 @@ class LaravelServiceProvider extends ServiceProvider
         //$this->publishes([$path => config_path('jwt.php')], 'config');
         //$this->mergeConfigFrom($path, 'jwt');
 
-        $this->loadRoutesFrom($path . '/routes/routes.php');
-
         Auth::provider('jwtuser', function($app, array $config) {
             return new JwtUserProvider();
         });
