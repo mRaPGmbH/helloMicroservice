@@ -14,9 +14,9 @@ Always replace `helloTest` with the name of your service or app:
     mv temp/.git helloTest/.git
     rm -rf temp
     cd helloTest
-    php artisan key:generate
     composer require hellocash/hellomicroservice
     php artisan vendor:publish --all
+    php artisan key:generate
 
 ## Configuration
 
@@ -47,7 +47,9 @@ Change:
     'uri' => '/graphql',
 to:
 
-    'uri' => '/api/${path}/graphql',
+    'uri' => '/api/test/graphql',
+(Replace `/test` with the url-path for your service or app.)    
+    
 Change:
 
     'guard' => null,
@@ -97,6 +99,7 @@ to:
 Change:
 
     'algo' => env('JWT_ALGO', 'HS256'),
+    ...
     'required_claims' => [
         'iss',
         'iat',
@@ -108,6 +111,7 @@ Change:
 to:
 
     'algo' => env('JWT_ALGO', 'RS256'), // please note: R instead of H !
+    ...
     'required_claims' => [
         'exp',
     ],
@@ -133,8 +137,7 @@ Change:
     APP_URL=http://localhost
 to:
 
-    APP_URL=put-aws-loadbalancer-url-here
-You can get the `APP_URL` from helloCrm on GitHub.
+    APP_URL=put-your-app-url-here
 
 Change: 
 
@@ -154,29 +157,47 @@ to:
     DB_PASSWORD=helloTest # replace with name of your service
 Add at the bottom:
 
-    SENTRY_LARAVEL_DSN=put-sentry-url-here
+    SENTRY_LARAVEL_DSN=put-your-sentry-url-here
     JWT_PUBLIC_KEY=file:///var/www/html/jwtkey-public.pem
     LIGHTHOUSE_CACHE_ENABLE=true
     SCOUT_DRIVER=mysql
     
-Copy the value of `SENTRY_LARAVEL_DSN` and the file `jwtkey-public.pem` from helloCrm on GitHub
+Copy the file `jwtkey-public.pem` (RSA public key) into the 
+root dir of your application. If you don't have an RSA key pair
+yet, you can create one with:
+
+    openssl genrsa -des3 -out jwtkey-private.pem 2048
+    openssl rsa -in jwtkey-private.pem -outform PEM -pubout -out jwtkey-public.pem
 
 ### .env.production
+First:
 
-Change:
+    cp .env .env.production
+Then change:
 
-    APP_NAME=TODO
+    APP_ENV=local
     ...
-    APP_KEY=TODO
+    APP_DEBUG=true
     ...
-    APP_URL=TODO
+    LOG_CHANNEL=stack
     ...
-    DB_DATABASE=TODO
-    DB_USERNAME=TODO
-    DB_PASSWORD=TODO
+    SESSION_DRIVER=file
+to:
+
+    APP_ENV=production
     ...
-    SENTRY_LARAVEL_DSN=TODO
-by filling in the respective values from .env
+    APP_DEBUG=false
+    ...
+    LOG_CHANNEL=stderr
+    ...
+    SESSION_DRIVER=array
+Delete all rows that start with:
+
+    REDIS_*
+    MAIL_*
+    AWS_*
+    PUSHER_*
+    MIX_PUSHER_* 
 
 ### .env.example
 
@@ -195,14 +216,13 @@ Change:
 	});
 to:
 
-    Route::group([
-        'namespace' => 'HelloCash\HelloMicroservice\Http\Controllers'
-    ], function() {
-        Route::get('/', 'HealthCheck');
-        Route::get('api/test/', 'HealthCheck');
-    });
+    Route::namespace('\HelloCash\HelloMicroservice\Http\Controllers')->group(function () {"
+        Route::get('/', 'HealthCheck');"
+        Route::get('api/test/', 'HealthCheck');"
+    });"
+(Replace `/test` with the url-path for your service or app.)    
 
-## Service Providers
+## Laravel stuff
 
 ### app/Providers/AppServiceProvider
 Add:
@@ -211,12 +231,6 @@ Add:
         ...
         Builder::defaultStringLength(191); // required for compatibility with mysql 5.6 (and RDS Aurora 5.6-compatible)
 (This will no longer be needed after upgrading to mysql 5.7!)
-
-## Docker setup
-
-
-
-## Stuff to delete
 
 ### routes/api.php
 
@@ -238,6 +252,35 @@ Delete:
         ...
     }
 
+Add:
+
+    "A datetime and timezone string in ISO 8601 format `Y-m-dTH:i:sO`, e.g. `2020-04-20T13:53:12+02:00`."
+    scalar DateTimeTz @scalar(class: "Nuwave\\Lighthouse\\Schema\\Types\\Scalars\\DateTimeTz")
+
+    "file upload"
+    scalar Upload @scalar(class: "Nuwave\\Lighthouse\\Schema\\Types\\Scalars\\Upload")
+    
+    input DateRange {
+        from: Date!
+        to: Date!
+    }
+    input DateTimeRange {
+        from: DateTime!
+        to: DateTime!
+    }
+    input DateTimeTzRange {
+        from: DateTimeTz!
+        to: DateTimeTz!
+    }
+    input IntRange {
+        from: Int
+        to: Int
+    }
+    input FloatRange {
+        from: Float
+        to: Float
+    }
+
 ### app/User
 
 Delete this file.
@@ -245,18 +288,6 @@ Delete this file.
 ### database/seeds/UserSeeder
 
 Delete this file.
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## Bonus features
 
