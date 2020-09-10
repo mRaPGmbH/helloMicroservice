@@ -86,7 +86,12 @@ class MakeGraphQlSchemaCommand extends Command
      */
     protected function buildListQuery(): string
     {
-        return '    ' . Str::plural(lcfirst($this->classname)) . ': [' . $this->classname . '] @paginate(defaultCount: 10) @guard' . PHP_EOL;
+        $schema = '    ' . Str::plural(lcfirst($this->classname)) . '(' . PHP_EOL;
+        $schema .= $this->getFields($this->model, true, true);
+        $schema .= '        orderBy: [OrderByClause!] @orderBy' . PHP_EOL;
+        $schema .= '        search: String @search' . PHP_EOL;
+        $schema .= '    ): [' . $this->classname . '] @paginate(defaultCount: 10) @guard @can(ability:"viewAny")' . PHP_EOL;
+        return $schema;
     }
 
     /**
@@ -94,7 +99,7 @@ class MakeGraphQlSchemaCommand extends Command
      */
     protected function buildFindQuery(): string
     {
-        return '    ' . lcfirst($this->classname) . '(' . $this->primary . '): ' . $this->classname . ' @find @guard' . PHP_EOL;
+        return '    ' . lcfirst($this->classname) . '(' . $this->primary . '): ' . $this->classname . ' @find @guard @can(ability:"view", find:"id")' . PHP_EOL;
     }
 
     /**
@@ -104,7 +109,7 @@ class MakeGraphQlSchemaCommand extends Command
     {
         $schema = '    create' . $this->classname . '(' . PHP_EOL;
         $schema .= $this->getFields($this->model);
-        $schema .= '    ): ' . $this->classname . '! @create @guard' . PHP_EOL;
+        $schema .= '    ): ' . $this->classname . '! @create @guard @can(ability:"create")' . PHP_EOL;
         return $schema;
     }
 
@@ -121,9 +126,9 @@ class MakeGraphQlSchemaCommand extends Command
         $schema .= $this->getFields($this->model);
         $schema .= '    ): ' . $this->classname . '! ';
         if (in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($this->model), true)) {
-            $schema .= '@field(resolver: "UpdateMutation")';
+            $schema .= '@field(resolver: "UpdateMutation")  @can(ability:"update")';
         } else {
-            $schema .= '@update';
+            $schema .= '@update @can(ability:"update", find:"id")';
         }
         $schema .= ' @guard' . PHP_EOL;
         return $schema;
@@ -134,11 +139,11 @@ class MakeGraphQlSchemaCommand extends Command
      */
     protected function buildDeleteMutation(): string
     {
-        $schema = '    delete' . $this->classname . '(' . $this->model . '): ' . $this->classname . ' ';
+        $schema = '    delete' . $this->classname . '(' . $this->getPrimaryFields($this->model) . ' @eq): ' . $this->classname . ' ';
         if (in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($this->model), true)) {
-            $schema .= '@field(resolver: "DeleteMutation")';
+            $schema .= '@field(resolver: "DeleteMutation") @can(ability:"delete")';
         } else {
-            $schema .= '@delete';
+            $schema .= '@delete @can(ability:"delete", find:"id")';
         }
         $schema .= ' @guard' . PHP_EOL;
         return $schema;
@@ -165,18 +170,22 @@ class MakeGraphQlSchemaCommand extends Command
      * @param string $prefix
      * @return string
      */
-    protected function getFields(Model $model, bool $all = false, string $prefix = '        '): string
+    protected function getFields(Model $model, bool $all = false, bool $addWhere = false, string $prefix = '        '): string
     {
         $schema = '';
         foreach ($model->getFillable() as $field) {
             if ($field === 'tenant_id') {
                 continue;
             }
-            $schema .= $this->getSingleField($field, $model, $prefix);
+            $schema .= $this->getSingleField($field, $model, $prefix, $addWhere);
         }
         if ($all && $model->timestamps) {
-            $schema .= $prefix . 'created_at: DateTime!' . PHP_EOL;
-            $schema .= $prefix . 'updated_at: DateTime!' . PHP_EOL;
+            $inject = '!';
+            if ($addWhere) {
+                $inject = 'Range @whereBetween';
+            }
+            $schema .= $prefix . 'created_at: DateTime' . $inject . PHP_EOL;
+            $schema .= $prefix . 'updated_at: DateTime' . $inject .  PHP_EOL;
         }
         return $schema;
     }
@@ -192,14 +201,14 @@ class MakeGraphQlSchemaCommand extends Command
         if (in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model))) {
             $parts = [];
             foreach ($model->getPrimaryKeyFields() as $field) {
-                $parts[] = $this->getSingleField($field, $model, '', $postfix);
+                $parts[] = $this->getSingleField($field, $model, '', false, $postfix);
             }
             return implode(' ', $parts);
         }
         return $model->getKeyName() . ': ' . ucfirst($model->getKeyType()) . '!' . $postfix;
     }
 
-    protected function getSingleField(string $field, Model $model, string $prefix = '        ', string $postfix = PHP_EOL): string
+    protected function getSingleField(string $field, Model $model, string $prefix = '        ', bool $addWhere = false, string $postfix = PHP_EOL): string
     {
         $casts = $model->getCasts();
         $inject = '';
@@ -208,24 +217,45 @@ class MakeGraphQlSchemaCommand extends Command
             $inject = '!';
         }
         if ($field === 'country_code') {
+            if ($addWhere) {
+                return $prefix . $field . ': [CountryCode!] @in' . $postfix;
+            }
             return $prefix . $field . ': CountryCode!' . $postfix;
         }
         switch ($casts[$field] ?? 'string') {
             case 'string':
             default:
+                if ($addWhere) {
+                    $inject .= ' @where(operator: "%LIKE%")';
+                }
                 return $prefix . $field . ': String' . $inject . $postfix;
             case 'integer':
             case 'timestamp':
+                if ($addWhere) {
+                    $inject .= ' @eq';
+                }
                 return $prefix . $field . ': Int' . $inject . $postfix;
             case 'real':
             case 'float':
             case 'double':
+                if ($addWhere) {
+                    $inject .= 'Range @whereBetween';
+                }
                 return $prefix . $field . ': Float' . $inject . $postfix;
             case 'boolean':
+                if ($addWhere) {
+                    $inject .= ' @eq';
+                }
                 return $prefix . $field . ': Boolean' . $inject . $postfix;
             case 'date':
+                if ($addWhere) {
+                    $inject .= 'Range @whereBetween';
+                }
                 return $prefix . $field . ': Date' . $inject . $postfix;
             case 'datetime':
+                if ($addWhere) {
+                    $inject .= 'Range @whereBetween';
+                }
                 return $prefix . $field . ': DateTime' . $inject . $postfix;
         }
     }
