@@ -4,6 +4,7 @@
 namespace HelloCash\HelloMicroservice\GraphQL\EnumTypes;
 
 
+use Exception;
 use GraphQL\Type\Definition\EnumType;
 use JsonException;
 
@@ -1382,7 +1383,10 @@ class Countries extends BaseEnum
         if ($lang === 'en') {
             return $hash;
         }
-        $file = __DIR__ .'/../../../../../umpirsky/country-list/data/' . $lang . '/country.json';
+        $file = base_path('vendor/umpirsky/country-list/data/' . $lang . '/country.json');
+        if (!file_exists($file)) {
+            throw new Exception($file . 'is missing!');
+        }
         $translation = json_decode(file_get_contents($file), true, 512, JSON_THROW_ON_ERROR);
         return array_intersect_key($translation, $hash);
     }

@@ -90,7 +90,7 @@ class MakeGraphQlSchemaCommand extends Command
         $schema .= $this->getFields($this->model, true, true);
         $schema .= '        orderBy: [OrderByClause!] @orderBy' . PHP_EOL;
         $schema .= '        search: String @search' . PHP_EOL;
-        $schema .= '    ): [' . $this->classname . '] @paginate(defaultCount: 10) @guard @can(ability:"viewAny")' . PHP_EOL;
+        $schema .= '    ): [' . $this->classname . '!] @paginate(defaultCount: 10) @guard @can(ability:"viewAny")' . PHP_EOL;
         return $schema;
     }
 

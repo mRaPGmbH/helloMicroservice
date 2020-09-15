@@ -19,10 +19,13 @@ class ClientAwareErrorHandler implements ErrorHandler
         $exception = $error->getPrevious();
 
         $newException = null;
+        $matches = [];
         if ($exception instanceof ModelNotFoundException) {
             $newException = new ClientAwareException('Model not found.', 0, $exception);
         } elseif ($exception instanceof QueryException && preg_match('/foreign key constraint fail/i', $exception->getMessage())) {
             $newException = new ClientAwareException('Unknown foreign id.', 0, $exception);
+        } elseif ($exception instanceof QueryException && preg_match('/Unknown column \'([^\']+)\' in \'order clause\'/i', $exception->getMessage(), $matches)) {
+            $newException = new ClientAwareException('Unknown column \''.$matches[1].'\' in \'order clause\'.', 0, $exception);
         } elseif (!$error->isClientSafe() && env('APP_ENV') === 'production' && app()->bound('sentry')) {
             app('sentry')->captureException($exception);
         }
