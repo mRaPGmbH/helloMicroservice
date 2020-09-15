@@ -5,10 +5,19 @@ namespace HelloCash\HelloMicroservice;
 
 use HelloCash\HelloMicroservice\Scopes\TenantScope;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Sentry\State\Scope;
 use Tymon\JWTAuth\Facades\JWTAuth;
+
+use function Sentry\configureScope;
 
 class JwtUser implements Authenticatable
 {
+    public const GUEST = 0;
+    public const USER_READONLY = 1;
+    public const USER = 2;
+    public const ADMIN = 3;
+    public const SUPER_ADMIN = 4;
+
 
     protected $payload = [];
 
@@ -18,7 +27,16 @@ class JwtUser implements Authenticatable
     public function __construct()
     {
         $this->payload = JWTAuth::parseToken()->getPayload();
-        TenantScope::$tenantId = $this->getClaim('tid');
+        $tenantId = $this->getClaim('tid');
+        $userId = $this->getClaim('sub');
+
+        TenantScope::$tenantId = $tenantId;
+
+        /* configure sentry */
+        configureScope(function(Scope $scope) use($tenantId, $userId): void {
+            $scope->setTag('tenant_id', $tenantId);
+            $scope->setTag('user_id', $userId);
+        });
     }
 
     /**
@@ -31,11 +49,19 @@ class JwtUser implements Authenticatable
     }
 
     /**
+     * @return int
+     */
+    public function getLevel()
+    {
+        return $this->payload['lvl'] ?? 0;
+    }
+
+    /**
      * @return string
      */
     public function getAuthIdentifierName(): string
     {
-        return '';
+        return 'user_id';
     }
 
     /**
@@ -43,7 +69,7 @@ class JwtUser implements Authenticatable
      */
     public function getAuthIdentifier(): int
     {
-        return 1;
+        $this->getClaim('sub');
     }
 
     /**

@@ -18,7 +18,10 @@ class JwtPolicy
      */
     public function viewAny(JwtUser $user): bool
     {
-        return $user->getClaim('adm') === true;
+        if ($user->getClaim('adm') === true) {
+            return true; // OLD variant - TODO: remove this, when no longer needed.
+        }
+        return $user->getLevel() >= JwtUser::USER_READONLY;
     }
 
     /**
@@ -30,7 +33,10 @@ class JwtPolicy
      */
     public function view(JwtUser $user, Model $model = null): bool
     {
-        return $user->getClaim('adm') === true;
+        if ($user->getClaim('adm') === true) {
+            return true; // OLD variant - TODO: remove this, when no longer needed.
+        }
+        return $user->getLevel() >= JwtUser::USER_READONLY;
     }
 
     /**
@@ -41,7 +47,10 @@ class JwtPolicy
      */
     public function create(JwtUser $user): bool
     {
-        return $user->getClaim('adm') === true;
+        if ($user->getClaim('adm') === true) {
+            return true; // OLD variant - TODO: remove this, when no longer needed.
+        }
+        return $user->getLevel() >= JwtUser::USER;
     }
 
 
@@ -54,7 +63,10 @@ class JwtPolicy
      */
     public function update(JwtUser $user, Model $model = null): bool
     {
-        return $user->getClaim('adm') === true;
+        if ($user->getClaim('adm') === true) {
+            return true; // OLD variant - TODO: remove this, when no longer needed.
+        }
+        return $user->getLevel() >= JwtUser::USER;
     }
 
     /**
@@ -66,7 +78,10 @@ class JwtPolicy
      */
     public function delete(JwtUser $user, Model $model = null): bool
     {
-        return $user->getClaim('adm') === true;
+        if ($user->getClaim('adm') === true) {
+            return true; // OLD variant - TODO: remove this, when no longer needed.
+        }
+        return $user->getLevel() >= JwtUser::USER;
     }
 
     /**
@@ -78,7 +93,7 @@ class JwtPolicy
      */
     public function restore(JwtUser $user, Model $model = null): bool
     {
-        return $user->getClaim('adm') === true;
+        return $user->getLevel() >= JwtUser::SUPER_ADMIN;
     }
 
     /**
@@ -90,6 +105,6 @@ class JwtPolicy
      */
     public function forceDelete(JwtUser $user, Model $model = null): bool
     {
-        return $user->getClaim('adm') === true;
+        return $user->getLevel() >= JwtUser::SUPER_ADMIN;
     }
 }

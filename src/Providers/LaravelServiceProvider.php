@@ -7,6 +7,9 @@ namespace HelloCash\HelloMicroservice\Providers;
 use HelloCash\HelloMicroservice\Console\MakeGraphQlSchemaCommand;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\ServiceProvider;
+use Sentry\State\Scope;
+
+use function Sentry\configureScope;
 
 class LaravelServiceProvider extends ServiceProvider
 {
@@ -29,6 +32,11 @@ class LaravelServiceProvider extends ServiceProvider
 
         Auth::provider('jwtuser', function($app, array $config) {
             return new JwtUserProvider();
+        });
+
+        /* configure sentry */
+        configureScope(function(Scope $scope): void {
+            $scope->setTag('app_name', env('APP_NAME'));
         });
     }
 
