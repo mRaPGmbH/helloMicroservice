@@ -149,6 +149,7 @@ abstract class TestCase extends BaseTestCase
      *
      * @param Model $model
      * @return array
+     * @throws \JsonException
      */
     private function getFieldsSchema(Model $model): array
     {
