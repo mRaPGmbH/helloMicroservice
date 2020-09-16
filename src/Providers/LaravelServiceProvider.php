@@ -36,7 +36,7 @@ class LaravelServiceProvider extends ServiceProvider
 
         /* configure sentry */
         configureScope(function(Scope $scope): void {
-            $scope->setTag('app_name', env('APP_NAME'));
+            $scope->setTag('app_name', config('app.name') ?? 'unknown');
         });
     }
 
