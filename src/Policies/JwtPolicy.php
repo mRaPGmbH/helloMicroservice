@@ -2,6 +2,7 @@
 
 namespace HelloCash\HelloMicroservice\Policies;
 
+use HelloCash\HelloMicroservice\Interfaces\JwtUserInterface;
 use Illuminate\Database\Eloquent\Model;
 use HelloCash\HelloMicroservice\JwtUser;
 use Illuminate\Auth\Access\HandlesAuthorization;
@@ -13,10 +14,10 @@ class JwtPolicy
     /**
      * Determine whether the user can view any models.
      *
-     * @param JwtUser $user
+     * @param JwtUserInterface $user
      * @return bool
      */
-    public function viewAny(JwtUser $user): bool
+    public function viewAny(JwtUserInterface $user): bool
     {
         if ($user->getClaim('adm') === true) {
             return true; // OLD variant - TODO: remove this, when no longer needed.
@@ -27,11 +28,11 @@ class JwtPolicy
     /**
      * Determine whether the user can view the model.
      *
-     * @param JwtUser $user
+     * @param JwtUserInterface $user
      * @param Model|null $model
      * @return bool
      */
-    public function view(JwtUser $user, Model $model = null): bool
+    public function view(JwtUserInterface $user, Model $model = null): bool
     {
         if ($user->getClaim('adm') === true) {
             return true; // OLD variant - TODO: remove this, when no longer needed.
@@ -42,10 +43,10 @@ class JwtPolicy
     /**
      * Determine whether the user can create models.
      *
-     * @param JwtUser $user
+     * @param JwtUserInterface $user
      * @return bool
      */
-    public function create(JwtUser $user): bool
+    public function create(JwtUserInterface $user): bool
     {
         if ($user->getClaim('adm') === true) {
             return true; // OLD variant - TODO: remove this, when no longer needed.
@@ -57,11 +58,11 @@ class JwtPolicy
     /**
      * Determine whether the user can update the model.
      *
-     * @param JwtUser $user
+     * @param JwtUserInterface $user
      * @param Model|null $model
      * @return bool
      */
-    public function update(JwtUser $user, Model $model = null): bool
+    public function update(JwtUserInterface $user, Model $model = null): bool
     {
         if ($user->getClaim('adm') === true) {
             return true; // OLD variant - TODO: remove this, when no longer needed.
@@ -72,11 +73,11 @@ class JwtPolicy
     /**
      * Determine whether the user can delete the model.
      *
-     * @param JwtUser $user
+     * @param JwtUserInterface $user
      * @param Model|null $model
      * @return bool
      */
-    public function delete(JwtUser $user, Model $model = null): bool
+    public function delete(JwtUserInterface $user, Model $model = null): bool
     {
         if ($user->getClaim('adm') === true) {
             return true; // OLD variant - TODO: remove this, when no longer needed.
@@ -87,11 +88,11 @@ class JwtPolicy
     /**
      * Determine whether the user can restore the model.
      *
-     * @param JwtUser $user
+     * @param JwtUserInterface $user
      * @param Model|null $model
      * @return bool
      */
-    public function restore(JwtUser $user, Model $model = null): bool
+    public function restore(JwtUserInterface $user, Model $model = null): bool
     {
         return $user->getLevel() >= JwtUser::SUPER_ADMIN;
     }
@@ -99,11 +100,11 @@ class JwtPolicy
     /**
      * Determine whether the user can permanently delete the model.
      *
-     * @param JwtUser $user
+     * @param JwtUserInterface $user
      * @param Model|null $model
      * @return bool
      */
-    public function forceDelete(JwtUser $user, Model $model = null): bool
+    public function forceDelete(JwtUserInterface $user, Model $model = null): bool
     {
         return $user->getLevel() >= JwtUser::SUPER_ADMIN;
     }
