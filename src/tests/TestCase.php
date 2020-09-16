@@ -152,7 +152,7 @@ abstract class TestCase extends BaseTestCase
      */
     private function getFieldsSchema(Model $model): array
     {
-        $json = json_decode($this->introspect()->content(), true);
+        $json = json_decode($this->introspect()->content(), false, 512, JSON_THROW_ON_ERROR);
         $schemaFields = null;
         foreach ($json->data->__schema->types as $type) {
             if ($type->name === $this->getShortClassname(get_class($model))) {
