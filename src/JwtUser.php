@@ -35,8 +35,8 @@ class JwtUser implements Authenticatable, JwtUserInterface
 
         /* configure sentry */
         configureScope(function(Scope $scope) use($tenantId, $userId): void {
-            $scope->setTag('tenant_id', $tenantId);
-            $scope->setTag('user_id', $userId);
+            $scope->setTag('tenant_id', $tenantId ?? 'n/a');
+            $scope->setTag('user_id', $userId ?? 'n/a');
         });
     }
 
