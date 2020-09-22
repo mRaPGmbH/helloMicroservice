@@ -15,7 +15,7 @@ class TenantScope implements Scope
     /**
      * @var int|null
      */
-    public static ?int $tenantId;
+    public static ?int $tenantId = null;
 
     public function apply(Builder $builder, Model $model): void
     {
