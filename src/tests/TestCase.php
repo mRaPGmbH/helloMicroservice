@@ -79,7 +79,11 @@ abstract class TestCase extends BaseTestCase
         $this->debug($response, $query);
         $response->assertStatus(200);
         $response->assertJsonStructure($jsonStructure);
-        if (!in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model), true)) {
+        if (in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model), true)) {
+            foreach ($model->getPrimaryKeyFields() as $key) {
+                $model->$key = $response->json('data')[$shortClassname][$key];
+            }
+        } else {
             $model->id = $response->json('data')[$shortClassname]['id'];
         }
         self::assertModelEqualsDatabase($model);
@@ -98,13 +102,13 @@ abstract class TestCase extends BaseTestCase
     /**
      * @param string $name
      * @param Model $model
-     * @param bool $includeId
+     * @param bool $update
      * @return array
      */
-    private function createMutation(string $name, Model $model, bool $includeId = false): array
+    private function createMutation(string $name, Model $model, bool $update = false): array
     {
         $query = 'mutation { ' . $name . '(';
-        $query .= implode(' ', $this->getFields($model, $includeId));
+        $query .= implode(' ', $this->getFields($model, $update));
         $query .= ') { ' . implode(', ', $this->getSelect($model)) . ' } }';
         $json = [
             'data' => [
@@ -119,14 +123,19 @@ abstract class TestCase extends BaseTestCase
      * @param bool $includeId
      * @return array
      */
-    private function getFields(Model $model, bool $includeId = false): array
+    private function getFields(Model $model, bool $update = false): array
     {
         $schema = $this->getFieldsSchema($model);
         $fields = [];
-        if ($includeId) {
-            $fields[] = 'id:' . $model->id;
+        $fillable = $model->getFillable();
+        if ($update) {
+            if (in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model), true)) {
+                $fillable = array_unique(array_merge($fillable, $model->getPrimaryKeyFields()));
+            } else {
+                $fields[] = 'id:' . $model->id;
+            }
         }
-        foreach ($model->getFillable() as $field) {
+        foreach ($fillable as $field) {
             if ($field === 'tenant_id') {
                 continue;
             }
@@ -257,7 +266,6 @@ abstract class TestCase extends BaseTestCase
     {
         $compareModel = null;
         if (in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model), true)) {
-            $model->attributesToArray();
             $compareModel = $model::queryForMutations($model->attributesToArray())->first();
         } else {
             if (empty($model->id)) {
@@ -343,7 +351,7 @@ abstract class TestCase extends BaseTestCase
         [$query, $jsonStructure] = $this->createMutation(
             $shortClassname,
             $model,
-            !in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model), true)
+            true
         );
         $response = $this->jwt()->graphQL($query);
         $this->debug($response, $query);
@@ -554,7 +562,11 @@ abstract class TestCase extends BaseTestCase
         $response->assertJsonStructure($jsonStructure);
         $model = new $classname();
         $model->fill($response->json('data')[$shortClassname]);
-        if (!in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model), true)) {
+        if (in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model), true)) {
+            foreach ($model->getPrimaryKeyFields() as $key) {
+                $model->$key = $response->json('data')[$shortClassname][$key];
+            }
+        } else {
             $model->id = $compareModel->id;
         }
         self::assertModelEqualsDatabase($model);
@@ -569,7 +581,11 @@ abstract class TestCase extends BaseTestCase
     {
         $query = '{ ' . $name . '(';
         $query .= implode(', ', $this->getFindBy($model)) . ')';
-        $fields = array_diff($model->getFillable(), ['tenant_id'], $model->getHidden());
+        $fillable = $model->getFillable();
+        if (in_array('HelloCash\HelloMicroservice\Traits\CustomMutations', class_uses($model), true)) {
+            $fillable = array_unique(array_merge($fillable, $model->getPrimaryKeyFields()));
+        }
+        $fields = array_diff($fillable, ['tenant_id'], $model->getHidden());
         $query .= '{' . implode(' ', $fields) . '}}';
         $json = [
             'data' => [
