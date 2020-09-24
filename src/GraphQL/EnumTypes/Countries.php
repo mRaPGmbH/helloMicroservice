@@ -1323,32 +1323,37 @@ class Countries extends BaseEnum
      * @param string $countryName
      * @param bool $strict
      * @return string
+     * @throws JsonException
      */
     public static function guessCountryCode(string $countryName, bool $strict = false): string
     {
         if (empty($countryName)) {
             return 'XX';
         }
-        //$countries = array_flip(self::getAsHash());
         $countries = self::getMultiLanguageList();
         if (strlen($countryName) === 2) {
             $countryCodes = array_values($countries);
-            if (in_array($countryName, $countryCodes, true)) {
-                return $countryName;
+            if (in_array(mb_strtoupper($countryName), $countryCodes, false)) {
+                return mb_strtoupper($countryName);
             }
             return 'XX';
         }
         if (strlen($countryName) === 3) {
-            return self::convertAlpha3ToAlpha2($countryName);
+            return self::convertAlpha3ToAlpha2(mb_strtoupper($countryName));
         }
 
-        if (isset($countries[$countryName])) {
-            return $countries[$countryName];
+        $countryName = mb_strtolower($countryName);
+
+        foreach ($countries as $name => $code) {
+            if ($countryName === mb_strtolower($name)) {
+                return $code;
+            }
         }
+
         $parts = [];
         foreach ($countries as $name => $code) {
             $part = explode(',', $name, 1)[0];
-            $part = trim(explode('(', $part, 1)[0]);
+            $part = mb_strtolower(trim(explode('(', $part, 1)[0]));
             $parts[$code] = $part;
         }
 

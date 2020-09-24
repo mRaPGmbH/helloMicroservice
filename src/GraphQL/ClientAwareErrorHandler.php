@@ -10,6 +10,7 @@ use GraphQL\Error\Error;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
 use Nuwave\Lighthouse\Execution\ErrorHandler;
+use Tymon\JWTAuth\Exceptions\TokenExpiredException;
 
 class ClientAwareErrorHandler implements ErrorHandler
 {
@@ -26,6 +27,8 @@ class ClientAwareErrorHandler implements ErrorHandler
             $newException = new ClientAwareException('Unknown foreign id.', 0, $exception);
         } elseif ($exception instanceof QueryException && preg_match('/Unknown column \'([^\']+)\' in \'order clause\'/i', $exception->getMessage(), $matches)) {
             $newException = new ClientAwareException('Unknown column \''.$matches[1].'\' in \'order clause\'.', 0, $exception);
+        } elseif ($exception instanceof TokenExpiredException) {
+            $newException = new ClientAwareException('Token is expired.', 0, $exception);
         } elseif (!$error->isClientSafe() && env('APP_ENV') === 'production' && app()->bound('sentry')) {
             app('sentry')->captureException($exception);
         }
