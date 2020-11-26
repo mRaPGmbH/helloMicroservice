@@ -22,6 +22,7 @@ abstract class TestCase extends BaseTestCase
     {
         parent::setUp();
         $this->artisan('config:clear'); // nur zur sicherheit
+        $this->artisan('lighthouse:clear-cache'); // nur zur sicherheit
     }
 
     protected function jwtGuest(): TestCase
@@ -251,10 +252,16 @@ abstract class TestCase extends BaseTestCase
         if (isset($json['errors'][0])
             && (strpos($json['errors'][0]['message'], 'Syntax Error') === 0 || !$ignoreErrors)
         ) {
-            if (isset($json['errors'][0]['debugMessage'])) {
-                throw new Exception('GraphQL Error: ' . $json['errors'][0]['debugMessage'] . ' - Query was: ' . $query);
+            $message = 'GraphQL Error: ';
+            if (isset($json['errors'][0]['extensions']['validation'])) {
+                $message .= print_r($json['errors'][0]['extensions']['validation'], true);
+            } elseif (isset($json['errors'][0]['debugMessage'])) {
+                $message .= $json['errors'][0]['debugMessage'];
+            } else {
+                $message .= $json['errors'][0]['message'];
             }
-            throw new Exception('GraphQL Error: ' . $json['errors'][0]['message'] . ' - Query was: ' . $query);
+            $message .= ' - Query was: ' . $query;
+            throw new Exception($message);
         }
     }
 

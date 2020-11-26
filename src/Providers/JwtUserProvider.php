@@ -10,7 +10,8 @@ use Illuminate\Contracts\Auth\UserProvider;
 class JwtUserProvider implements UserProvider
 {
 
-    public function validateCredentials(Authenticatable $user, array $credentials) {
+    public function validateCredentials(Authenticatable $user, array $credentials)
+    {
         return true;
     }
 
